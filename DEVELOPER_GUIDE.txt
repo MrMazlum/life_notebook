@@ -1,0 +1,70 @@
+================================================================================
+                           LIFE NOTEBOOK - DEVELOPER GUIDE
+================================================================================
+LAST UPDATED: checkpoint_schedule_fix (The "It Works" Update)
+LANGUAGE: Dart / Flutter
+COMMENTS: STRICTLY ENGLISH
+================================================================================
+
+1. PROJECT STRUCTURE OVERVIEW
+--------------------------------------------------------------------------------
+lib/
+├── main.dart                 # Entry point, Theme Config, Navigation Shell
+├── models/
+│   └── lesson.dart           # Data model for Schedule (name, time, room, etc.)
+└── pages/
+    ├── gym_page.dart         # (Index 0)
+    ├── book_page.dart        # (Index 1)
+    ├── dashboard_page.dart   # (Index 2) - Home Button
+    ├── finance_page.dart     # (Index 3)
+    └── schedule_page.dart    # (Index 4) - Complex logic here
+
+================================================================================
+2. CRITICAL LOGIC & RULES (DO NOT BREAK)
+================================================================================
+
+A. THEME & COLORS
+   - We use a Global Color List in `main.dart`:
+     `globalPageColors = [DeepOrange, Blue, Teal, Green, DeepPurple]`
+   - Dark Mode Logic:
+     - Background is `Color(0xFF121212)`.
+     - Cards use `Color(0xFF1E1E1E)`.
+   - **AppBar Title Rule:**
+     - In Light Mode: Title is WHITE (because AppBar background is colored).
+     - In Dark Mode: Title takes the PAGE COLOR (e.g., Purple) to stand out against the black header.
+     - Code: `color: isDark ? activeColor : Colors.white`
+
+B. FLOATING ACTION BUTTON (FAB)
+   - **RULE:** DO NOT put a `floatingActionButton` in `main.dart`.
+   - **REASON:** `SchedulePage` has its own FAB (for adding classes). If `main.dart` also has one, they overlap or the global one blocks clicks.
+   - Only pages that need a FAB should define it inside their own `Scaffold`.
+
+C. SCHEDULE PAGE LOGIC (lib/pages/schedule_page.dart)
+   - **Dependencies:** Requires `lesson.dart` model.
+   - **Conflict Check:** Before adding a class, the app calculates minutes from midnight.
+     - `newStart < existingEnd && newEnd > existingStart`
+     - If true, it shows a SnackBar error and blocks the addition.
+   - **Dialog Theme:** The "Add Class" dialog must check `Theme.brightness`.
+     - Dark Mode: Background `Color(0xFF1E1E1E)`, Text `White`.
+     - Light Mode: Background `White`, Text `Black`.
+
+================================================================================
+3. DATABASE / DATA PERSISTENCE
+================================================================================
+- Currently, data is stored in memory (`List<Lesson> myLessons`).
+- If the app restarts, data resets.
+- Future Step: Implement `shared_preferences` or `sqflite` to save this list.
+
+================================================================================
+4. TROUBLESHOOTING
+================================================================================
+Q: The "+" button on the Schedule page isn't clicking.
+A: Check `main.dart`. Did you accidentally add a `floatingActionButton` there? Remove it.
+
+Q: The dialog text is invisible in Dark Mode.
+A: You are likely using default black text on a dark background. Ensure `TextStyle(color: isDark ? Colors.white : Colors.black)` is applied.
+
+Q: "Life Notebook" title is white in Dark Mode and hard to read?
+A: It should be the accent color (Purple/Green). Check the `AppBar` `title` style in `main.dart`.
+
+================================================================================
