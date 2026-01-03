@@ -1,39 +1,77 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Lesson {
-  String name;
-  String startTime; // Format: "09:00"
-  int durationMinutes; // New! Instead of endTime string, we store minutes (e.g. 45)
-  String room;
-  String instructor;
-  
+  final String? id;
+  final String userId;
+  final String name;
+  final String room;
+  final String instructor;
+  final String description;
+  final bool isLecture;
+  final bool isRecurring; //
+  final String dayOfWeek;
+  final int startTimeInMinutes;
+  final int durationInMinutes;
+
   Lesson({
+    this.id,
+    required this.userId,
     required this.name,
-    required this.startTime,
-    required this.durationMinutes,
-    required this.room,
-    required this.instructor,
+    this.room = '',
+    this.instructor = '',
+    this.description = '',
+    this.isLecture = true,
+    this.isRecurring = true, // Default to true (Weekly schedule)
+    required this.dayOfWeek,
+    required this.startTimeInMinutes,
+    required this.durationInMinutes,
   });
 
-  // Helper: Calculates "10:30" based on "09:00" + 90 mins
-  String getEndTimeString() {
-    try {
-      final parts = startTime.split(':');
-      final startHour = int.parse(parts[0]);
-      final startMinute = int.parse(parts[1]);
+  // Helpers
+  int get endTimeInMinutes => startTimeInMinutes + durationInMinutes;
 
-      // Create a date object (using today) to do the math easily
-      final now = DateTime.now();
-      final startDate = DateTime(now.year, now.month, now.day, startHour, startMinute);
-      
-      // Add duration
-      final endDate = startDate.add(Duration(minutes: durationMinutes));
+  String get startTimeString {
+    final h = startTimeInMinutes ~/ 60;
+    final m = startTimeInMinutes % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
 
-      // Format back to HH:MM string
-      final endHour = endDate.hour.toString().padLeft(2, '0');
-      final endMinute = endDate.minute.toString().padLeft(2, '0');
-      
-      return '$endHour:$endMinute';
-    } catch (e) {
-      return '??:??';
-    }
+  String get endTimeString {
+    final endMin = startTimeInMinutes + durationInMinutes;
+    final h = endMin ~/ 60;
+    final m = endMin % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'userId': userId,
+      'name': name,
+      'room': room,
+      'instructor': instructor,
+      'description': description,
+      'isLecture': isLecture,
+      'isRecurring': isRecurring,
+      'dayOfWeek': dayOfWeek,
+      'startTimeInMinutes': startTimeInMinutes,
+      'durationInMinutes': durationInMinutes,
+    };
+  }
+
+  factory Lesson.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Lesson(
+      id: doc.id,
+      userId: data['userId'] ?? '',
+      name: data['name'] ?? '',
+      room: data['room'] ?? '',
+      instructor: data['instructor'] ?? '',
+      description: data['description'] ?? '',
+      isLecture: data['isLecture'] ?? true,
+      isRecurring: data['isRecurring'] ?? true,
+      dayOfWeek: data['dayOfWeek'] ?? 'Monday',
+      startTimeInMinutes: data['startTimeInMinutes'] ?? 0,
+      durationInMinutes: data['durationInMinutes'] ?? 60,
+    );
   }
 }

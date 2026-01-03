@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/lesson.dart';
 import '../widgets/class_card.dart';
 import '../widgets/add_lesson_dialog.dart';
@@ -11,180 +12,212 @@ class SchedulePage extends StatefulWidget {
 }
 
 class _SchedulePageState extends State<SchedulePage> {
-  // 1. DYNAMIC DATABASE
-  final Map<String, String> _courseDatabase = {
-    'Linear Algebra': 'Dr. Alan Turing',
-    'Physics II': 'Dr. Marie Curie',
-    'History': 'Mr. Herodotus',
-    'English': 'Mr. Shakespeare',
-    'Flutter Development': 'Mr. Mazlum',
-    'Gym / Sports': 'Coach Arnold',
-    'Lunch Break': '-',
-  };
-
-  // 2. THE SCHEDULE
-  List<Lesson> myLessons = [
-    Lesson(
-      name: 'Linear Algebra',
-      startTime: '09:00',
-      durationMinutes: 90,
-      room: 'B-204',
-      instructor: 'Dr. Alan Turing',
-    ),
+  String _selectedDay = 'Monday';
+  final List<String> _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
-  void _showAddLessonDialog() {
+  final CollectionReference _lessonsRef = FirebaseFirestore.instance.collection(
+    'lessons',
+  );
+
+  // --- 1. ADD LESSON ---
+  void _addLessonToFirestore(Lesson lesson) {
+    _lessonsRef.add(lesson.toMap());
+  }
+
+  // --- 2. GLOBAL UPDATE ---
+  Future<void> _updateGlobalInstructor(
+    String courseName,
+    String newInstructor,
+  ) async {
+    final querySnapshot = await _lessonsRef
+        .where('userId', isEqualTo: 'test_user')
+        .where('name', isEqualTo: courseName)
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in querySnapshot.docs) {
+      batch.update(doc.reference, {'instructor': newInstructor});
+    }
+    await batch.commit();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Updated instructor for ${querySnapshot.docs.length} classes!',
+          ),
+        ),
+      );
+    }
+  }
+
+  // --- 3. DELETE ---
+  void _confirmDelete(String id) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AddLessonDialog(
-          courseDatabase: _courseDatabase,
-          currentLessons: myLessons,
-
-          onAddLesson: (newLesson) {
-            if (_hasConflict(newLesson)) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Conflict detected! ⛔'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            } else {
-              setState(() {
-                myLessons.add(newLesson);
-                myLessons.sort((a, b) => a.startTime.compareTo(b.startTime));
-              });
-            }
-          },
-
-          onSaveCourse: (name, instructor) {
-            setState(() {
-              _courseDatabase[name] = instructor;
-            });
-          },
-
-          onDeleteCourse: (courseName, deleteFromSchedule) {
-            setState(() {
-              _courseDatabase.remove(courseName);
-
-              if (deleteFromSchedule) {
-                myLessons.removeWhere((lesson) => lesson.name == courseName);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Deleted $courseName and all scheduled classes.',
-                    ),
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Removed $courseName from database only.'),
-                  ),
-                );
-              }
-            });
-          },
-        );
-      },
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Event?"),
+        content: const Text("This cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _lessonsRef.doc(id).delete();
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
-  }
-
-  bool _hasConflict(Lesson newLesson) {
-    final newStartParts = newLesson.startTime.split(':');
-    final newStartMin =
-        int.parse(newStartParts[0]) * 60 + int.parse(newStartParts[1]);
-    final newEndMin = newStartMin + newLesson.durationMinutes;
-
-    for (var lesson in myLessons) {
-      final existingStartParts = lesson.startTime.split(':');
-      final existingStartMin =
-          int.parse(existingStartParts[0]) * 60 +
-          int.parse(existingStartParts[1]);
-      final existingEndMin = existingStartMin + lesson.durationMinutes;
-
-      if (newStartMin < existingEndMin && newEndMin > existingStartMin) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  void _deleteLesson(int index) {
-    setState(() {
-      myLessons.removeAt(index);
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Using colorScheme.primary to ensure vibrant purple in Dark Mode
-    final vibrantColor = Theme.of(context).colorScheme.primary;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+    return StreamBuilder<QuerySnapshot>(
+      stream: _lessonsRef.where('userId', isEqualTo: 'test_user').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddLessonDialog,
-        backgroundColor: vibrantColor, // Forces the purple color
-        foregroundColor: isDark ? Colors.black : Colors.white, // Icon color
-        child: const Icon(Icons.add),
-      ),
+        final allLessons =
+            snapshot.data?.docs
+                .map((doc) => Lesson.fromFirestore(doc))
+                .toList() ??
+            [];
+        final daysLessons = allLessons
+            .where((l) => l.dayOfWeek == _selectedDay)
+            .toList();
+        daysLessons.sort(
+          (a, b) => a.startTimeInMinutes.compareTo(b.startTimeInMinutes),
+        );
 
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Today\'s Schedule',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            const Text(
-              'Manage your classes & professors',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
+        // SMART DATABASE
+        final Map<String, String> smartCourseDatabase = {};
+        for (var lesson in allLessons) {
+          if (lesson.isLecture && lesson.name.isNotEmpty) {
+            smartCourseDatabase[lesson.name] = lesson.instructor;
+          }
+        }
 
-            Expanded(
-              child: myLessons.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No classes today! 🎉",
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => AddLessonDialog(
+                  selectedDay: _selectedDay, // <--- PASSING THE CURRENT DAY
+                  courseDatabase: smartCourseDatabase,
+                  onAddLesson: _addLessonToFirestore,
+                  onUpdateGlobal: _updateGlobalInstructor,
+                ),
+              );
+            },
+            backgroundColor: primaryColor,
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+          body: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  children: [
+                    // HEADER
+                    Text(
+                      _selectedDay,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: myLessons.length,
-                      itemBuilder: (context, index) {
-                        final lesson = myLessons[index];
-                        return Dismissible(
-                          key: UniqueKey(),
-                          onDismissed: (direction) => _deleteLesson(index),
-                          background: Container(
-                            color: Colors.red,
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 20),
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
+                    ),
+                    const SizedBox(height: 15),
+
+                    // DAY SELECTOR
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: _days.map((day) {
+                        final isSelected = day == _selectedDay;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedDay = day),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? primaryColor
+                                    : (isDark
+                                          ? Colors.grey.shade800
+                                          : Colors.grey.shade200),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  day.substring(0, 3),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : (isDark
+                                              ? Colors.white54
+                                              : Colors.black54),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          child: ClassCard(lesson: lesson),
                         );
-                      },
+                      }).toList(),
                     ),
-            ),
-          ],
-        ),
-      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // LIST
+              Expanded(
+                child: daysLessons.isEmpty
+                    ? Center(
+                        child: Text(
+                          "No plans for $_selectedDay. ☕",
+                          style: TextStyle(color: Colors.grey.withOpacity(0.8)),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: daysLessons.length,
+                        itemBuilder: (context, index) {
+                          final lesson = daysLessons[index];
+                          return ClassCard(
+                            lesson: lesson,
+                            onDelete: () => _confirmDelete(lesson.id!),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
