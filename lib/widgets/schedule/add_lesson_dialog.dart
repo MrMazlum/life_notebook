@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import '../models/lesson.dart';
+import 'package:intl/intl.dart';
+import '../../models/lesson.dart';
 
 class AddLessonDialog extends StatefulWidget {
   final Map<String, String> courseDatabase;
   final Function(Lesson) onAddLesson;
   final Future<void> Function(String, String) onUpdateGlobal;
-  final String selectedDay;
+  final DateTime selectedDate; // CHANGED: Now accepts DateTime
 
   const AddLessonDialog({
     super.key,
     required this.courseDatabase,
     required this.onAddLesson,
     required this.onUpdateGlobal,
-    required this.selectedDay,
+    required this.selectedDate,
   });
 
   @override
@@ -100,14 +101,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.school, size: 32, color: primaryColor),
-              ),
+              Icon(Icons.school, size: 40, color: primaryColor),
               const SizedBox(height: 16),
               Text(
                 "Professor Changed",
@@ -119,64 +113,10 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Update instructor for '$course'?",
+                "Update instructor for '$course' globally?",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black26 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Column(
-                      children: [
-                        Text(
-                          "OLD",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          oldProf,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white70 : Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
-                    Column(
-                      children: [
-                        const Text(
-                          "NEW",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          newProf,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -184,41 +124,20 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(
-                          color: isDark ? Colors.white24 : Colors.grey.shade300,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(
-                        "Only This Class",
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
+                      child: const Text("Only This Class"),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
                         backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                       onPressed: () => Navigator.pop(ctx, true),
                       child: const Text(
                         "Update All",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.white),
                       ),
                     ),
                   ),
@@ -249,7 +168,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
 
     String finalInstructor = _toTitleCase(_instructorController.text.trim());
 
-    // --- CHECK UPDATE LOGIC ---
     bool performGlobalUpdate = false;
     if (existingKey.isNotEmpty && _isLecture) {
       final oldInstructor = widget.courseDatabase[existingKey]!;
@@ -264,16 +182,15 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       }
     }
 
-    // --- CRITICAL LOGIC FIX ---
-    // 1. Update Local Memory IMMEDIATELY if confirmed.
-    // This prevents the "Loop" because next time you click save, the memory is already updated.
-    if (performGlobalUpdate) {
+    if (performGlobalUpdate)
       widget.courseDatabase[finalCourseName] = finalInstructor;
-    }
 
-    // --- SAVE LOGIC ---
     final parts = _startTimeController.text.split(':');
     final startMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+
+    // NEW LOGIC: Calculate Specific Date string
+    final dayName = DateFormat('EEEE').format(widget.selectedDate);
+    final dateString = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
     final newLesson = Lesson(
       userId: 'test_user',
@@ -283,21 +200,17 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       description: _isLecture ? '' : _descriptionController.text,
       isLecture: _isLecture,
       isRecurring: _isRecurring,
-      dayOfWeek: widget.selectedDay,
+      dayOfWeek: dayName,
       startTimeInMinutes: startMin,
       durationInMinutes: _selectedDuration,
+      // CRITICAL FIX: If not recurring, lock it to this date.
+      specificDate: _isRecurring ? '' : dateString,
     );
 
     try {
-      // 2. Fire the global update asynchronously (don't block UI)
-      if (performGlobalUpdate) {
+      if (performGlobalUpdate)
         widget.onUpdateGlobal(finalCourseName, finalInstructor);
-      }
-
-      // 3. Add the new lesson
       widget.onAddLesson(newLesson);
-
-      // 4. Force Close immediately
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       print("Error saving: $e");
@@ -308,6 +221,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).primaryColor;
+    final accentColor = isDark ? Colors.deepPurpleAccent : primaryColor;
+    final dayName = DateFormat('EEEE').format(widget.selectedDate);
 
     return AlertDialog(
       scrollable: true,
@@ -322,7 +237,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. Type Chips (VISIBILITY FIXED)
             Row(
               children: [
                 Expanded(
@@ -330,13 +244,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     label: const Center(child: Text("🎓 Class")),
                     selected: _isLecture,
                     onSelected: (val) => setState(() => _isLecture = true),
-                    selectedColor: primaryColor.withOpacity(0.3),
+                    selectedColor: accentColor.withOpacity(0.3),
                     backgroundColor: isDark
                         ? Colors.white10
                         : Colors.grey.shade200,
                     labelStyle: TextStyle(
                       color: _isLecture
-                          ? (isDark ? Colors.white : primaryColor)
+                          ? (isDark ? Colors.white : accentColor)
                           : (isDark ? Colors.white70 : Colors.black54),
                       fontWeight: _isLecture
                           ? FontWeight.bold
@@ -345,11 +259,10 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    // FIX: White Border for Unselected state in Dark Mode
                     side: BorderSide(
                       color: _isLecture
-                          ? primaryColor
-                          : (isDark ? Colors.white38 : Colors.grey.shade300),
+                          ? accentColor
+                          : (isDark ? Colors.white12 : Colors.grey.shade300),
                     ),
                   ),
                 ),
@@ -359,13 +272,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     label: const Center(child: Text("📝 Task")),
                     selected: !_isLecture,
                     onSelected: (val) => setState(() => _isLecture = false),
-                    selectedColor: Colors.orange.withOpacity(0.3),
+                    selectedColor: accentColor.withOpacity(0.3),
                     backgroundColor: isDark
                         ? Colors.white10
                         : Colors.grey.shade200,
                     labelStyle: TextStyle(
                       color: !_isLecture
-                          ? Colors.orange
+                          ? (isDark ? Colors.white : accentColor)
                           : (isDark ? Colors.white70 : Colors.black54),
                       fontWeight: !_isLecture
                           ? FontWeight.bold
@@ -374,19 +287,16 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    // FIX: White Border for Unselected state in Dark Mode
                     side: BorderSide(
                       color: !_isLecture
-                          ? Colors.orange
-                          : (isDark ? Colors.white38 : Colors.grey.shade300),
+                          ? accentColor
+                          : (isDark ? Colors.white12 : Colors.grey.shade300),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-
-            // 2. Locked Day
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -398,7 +308,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 ),
               ),
               child: Text(
-                widget.selectedDay,
+                dayName,
                 style: TextStyle(
                   fontSize: 16,
                   color: isDark ? Colors.white70 : Colors.black87,
@@ -406,17 +316,15 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // 3. Name
             Autocomplete<String>(
               optionsBuilder: (TextEditingValue textEditingValue) {
                 if (textEditingValue.text == '')
                   return const Iterable<String>.empty();
-                return widget.courseDatabase.keys.where((String option) {
-                  return option.toLowerCase().contains(
+                return widget.courseDatabase.keys.where(
+                  (String option) => option.toLowerCase().contains(
                     textEditingValue.text.toLowerCase(),
-                  );
-                });
+                  ),
+                );
               },
               onSelected: (String selection) => _onCourseNameChanged(selection),
               fieldViewBuilder:
@@ -441,8 +349,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   },
             ),
             const SizedBox(height: 12),
-
-            // 4. Details
             if (_isLecture) ...[
               TextField(
                 controller: _roomController,
@@ -487,8 +393,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
             ],
             const SizedBox(height: 12),
-
-            // 5. Time
             Row(
               children: [
                 Expanded(
@@ -523,19 +427,14 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            // 6. Recurring Checkbox (VISIBILITY FIXED)
             Theme(
               data: Theme.of(context).copyWith(
                 checkboxTheme: CheckboxThemeData(
                   side: BorderSide(
-                    // FIX: White border ALWAYS in dark mode, even when unchecked
                     color: isDark ? Colors.white70 : Colors.grey,
                     width: 2,
                   ),
-                  // FIX: Ensure tick is white
                   checkColor: MaterialStateProperty.all(Colors.white),
                 ),
               ),
@@ -553,7 +452,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
                 value: _isRecurring,
-                activeColor: primaryColor,
+                activeColor: accentColor,
                 onChanged: (val) => setState(() => _isRecurring = val ?? true),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
@@ -569,7 +468,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
         ElevatedButton(
           onPressed: _submit,
           style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
+            backgroundColor: accentColor,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

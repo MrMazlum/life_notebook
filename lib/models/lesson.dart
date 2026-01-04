@@ -8,10 +8,14 @@ class Lesson {
   final String instructor;
   final String description;
   final bool isLecture;
-  final bool isRecurring; //
-  final String dayOfWeek;
+  final bool isRecurring;
+  final String dayOfWeek; // e.g., "Monday"
   final int startTimeInMinutes;
   final int durationInMinutes;
+
+  // NEW FIELDS
+  final List<String> excludeDates; // Dates to skip: ["2026-01-04"]
+  final String specificDate; // If NOT recurring: "2026-01-04"
 
   Lesson({
     this.id,
@@ -21,10 +25,12 @@ class Lesson {
     this.instructor = '',
     this.description = '',
     this.isLecture = true,
-    this.isRecurring = true, // Default to true (Weekly schedule)
+    this.isRecurring = true,
     required this.dayOfWeek,
     required this.startTimeInMinutes,
     required this.durationInMinutes,
+    this.excludeDates = const [],
+    this.specificDate = '',
   });
 
   // Helpers
@@ -55,6 +61,8 @@ class Lesson {
       'dayOfWeek': dayOfWeek,
       'startTimeInMinutes': startTimeInMinutes,
       'durationInMinutes': durationInMinutes,
+      'excludeDates': excludeDates, // Save to DB
+      'specificDate': specificDate, // Save to DB
     };
   }
 
@@ -72,6 +80,9 @@ class Lesson {
       dayOfWeek: data['dayOfWeek'] ?? 'Monday',
       startTimeInMinutes: data['startTimeInMinutes'] ?? 0,
       durationInMinutes: data['durationInMinutes'] ?? 60,
+      // Load from DB (safely handle lists)
+      excludeDates: List<String>.from(data['excludeDates'] ?? []),
+      specificDate: data['specificDate'] ?? '',
     );
   }
 }
