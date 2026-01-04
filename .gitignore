@@ -46,3 +46,4 @@ app.*.map.json
 
 # Firebase (Added for security)
 lib/firebase_options.dartandroid/app/google-services.json
+lib/firebase_options.dart
