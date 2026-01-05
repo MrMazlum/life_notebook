@@ -6,7 +6,7 @@ class AddLessonDialog extends StatefulWidget {
   final Map<String, String> courseDatabase;
   final Function(Lesson) onAddLesson;
   final Future<void> Function(String, String) onUpdateGlobal;
-  final DateTime selectedDate; // CHANGED: Now accepts DateTime
+  final DateTime selectedDate;
 
   const AddLessonDialog({
     super.key,
@@ -90,18 +90,31 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).primaryColor;
 
+    // UI FIX: Use DeepPurpleAccent for Dark Mode so it pops, Primary for Light
+    final highlightColor = isDark ? Colors.deepPurpleAccent : primaryColor;
+
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Dialog(
-        backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+        // UI FIX: Match the dark background of the main dialog (0xFF1E1E1E)
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.school, size: 40, color: primaryColor),
+              // UI FIX: Purple Circle Background
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: highlightColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                // UI FIX: Purple Icon
+                child: Icon(Icons.school, size: 32, color: highlightColor),
+              ),
               const SizedBox(height: 16),
               Text(
                 "Professor Changed",
@@ -113,10 +126,68 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Update instructor for '$course' globally?",
+                "Update instructor for '$course'?",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text(
+                          "OLD",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          oldProf,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    Column(
+                      children: [
+                        const Text(
+                          "NEW",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          newProf,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -124,20 +195,42 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text("Only This Class"),
+                      child: Text(
+                        "Only This Class",
+                        style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor:
+                            highlightColor, // UI FIX: Purple Button
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () => Navigator.pop(ctx, true),
                       child: const Text(
                         "Update All",
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -182,13 +275,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       }
     }
 
-    if (performGlobalUpdate)
+    if (performGlobalUpdate) {
       widget.courseDatabase[finalCourseName] = finalInstructor;
+    }
 
     final parts = _startTimeController.text.split(':');
     final startMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
 
-    // NEW LOGIC: Calculate Specific Date string
     final dayName = DateFormat('EEEE').format(widget.selectedDate);
     final dateString = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
@@ -203,13 +296,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       dayOfWeek: dayName,
       startTimeInMinutes: startMin,
       durationInMinutes: _selectedDuration,
-      // CRITICAL FIX: If not recurring, lock it to this date.
       specificDate: _isRecurring ? '' : dateString,
     );
 
     try {
-      if (performGlobalUpdate)
+      if (performGlobalUpdate) {
         widget.onUpdateGlobal(finalCourseName, finalInstructor);
+      }
       widget.onAddLesson(newLesson);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

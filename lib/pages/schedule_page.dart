@@ -19,14 +19,14 @@ class _SchedulePageState extends State<SchedulePage> {
     'lessons',
   );
 
-  // FIX 1: Define the stream variable here
   late Stream<QuerySnapshot> _lessonsStream;
+
+  // FIX: This variable stores the course info so FAB can access it
+  Map<String, String> _smartCourseDatabase = {};
 
   @override
   void initState() {
     super.initState();
-    // FIX 1: Initialize the stream ONCE here.
-    // This prevents the page from reloading/flashing when you swipe the calendar.
     _lessonsStream = _lessonsRef
         .where('userId', isEqualTo: 'test_user')
         .snapshots();
@@ -131,17 +131,12 @@ class _SchedulePageState extends State<SchedulePage> {
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // We need to fetch existing instructors for the dropdown
-          // Since we are outside the StreamBuilder now, we can't easily access 'allLessons'
-          // directly without refetching or storing it.
-          // For simplicity, we'll pass an empty map or you can cache it in the class state.
-          // Ideally, keep a local variable `_latestLessons` updated in the builder below.
-
+          // NOW PASSING THE REAL DATABASE
           showDialog(
             context: context,
             builder: (_) => AddLessonDialog(
               selectedDate: _selectedDate,
-              courseDatabase: {}, // Pass your database here if you cache it
+              courseDatabase: _smartCourseDatabase,
               onAddLesson: _addLessonToFirestore,
               onUpdateGlobal: _updateGlobalInstructor,
             ),
@@ -152,8 +147,6 @@ class _SchedulePageState extends State<SchedulePage> {
       ),
       body: Column(
         children: [
-          // HEADER IS NOW OUTSIDE THE STREAM BUILDER
-          // This ensures it doesn't rebuild/reset when the stream updates
           CalendarHeader(
             selectedDate: _selectedDate,
             onDateSelected: (newDate) =>
@@ -164,10 +157,9 @@ class _SchedulePageState extends State<SchedulePage> {
 
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _lessonsStream, // FIX 1: Use the persistent stream
+              stream: _lessonsStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  // Optional: Returns a transparent loader so it doesn't flash white
                   return const Center(child: CircularProgressIndicator());
                 }
 
@@ -177,16 +169,13 @@ class _SchedulePageState extends State<SchedulePage> {
                         .toList() ??
                     [];
 
-                // Update your autocomplete database logic here if needed
-                final Map<String, String> smartCourseDatabase = {};
+                // FIX: Populate the member variable for the FAB to use
+                _smartCourseDatabase = {};
                 for (var lesson in allLessons) {
                   if (lesson.isLecture && lesson.name.isNotEmpty) {
-                    smartCourseDatabase[lesson.name] = lesson.instructor;
+                    _smartCourseDatabase[lesson.name] = lesson.instructor;
                   }
                 }
-
-                // Re-attach the FAB logic properly (simplification for this snippet)
-                // You might want to move the FAB inside here or use a state variable for the DB.
 
                 final daysLessons = allLessons.where((l) {
                   if (l.isRecurring) {
