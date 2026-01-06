@@ -7,6 +7,9 @@ class AddLessonDialog extends StatefulWidget {
   final Function(Lesson) onAddLesson;
   final Future<void> Function(String, String) onUpdateGlobal;
   final DateTime selectedDate;
+  // Optional parameters for Editing
+  final Lesson? lessonToEdit;
+  final Function(String)? onDelete;
 
   const AddLessonDialog({
     super.key,
@@ -14,6 +17,8 @@ class AddLessonDialog extends StatefulWidget {
     required this.onAddLesson,
     required this.onUpdateGlobal,
     required this.selectedDate,
+    this.lessonToEdit,
+    this.onDelete,
   });
 
   @override
@@ -21,10 +26,11 @@ class AddLessonDialog extends StatefulWidget {
 }
 
 class _AddLessonDialogState extends State<AddLessonDialog> {
-  final _roomController = TextEditingController();
-  final _instructorController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _startTimeController = TextEditingController();
+  // Controllers
+  late TextEditingController _roomController;
+  late TextEditingController _instructorController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _startTimeController;
   late TextEditingController _courseNameController;
 
   int _selectedDuration = 60;
@@ -33,6 +39,40 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   bool _isRecurring = true;
 
   final List<int> _durations = [30, 45, 60, 90, 120, 180, 240];
+
+  @override
+  void initState() {
+    super.initState();
+    final edit = widget.lessonToEdit;
+
+    // 1. Pre-fill Controllers
+    _roomController = TextEditingController(text: edit?.room ?? '');
+    _instructorController = TextEditingController(text: edit?.instructor ?? '');
+    _descriptionController = TextEditingController(
+      text: edit?.description ?? '',
+    );
+
+    // Format start time for the controller
+    String initialTimeStr = '';
+    if (edit != null) {
+      final h = edit.startTimeInMinutes ~/ 60;
+      final m = edit.startTimeInMinutes % 60;
+      initialTimeStr =
+          '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+    }
+    _startTimeController = TextEditingController(text: initialTimeStr);
+    _courseNameController = TextEditingController(text: edit?.name ?? '');
+
+    // 2. Pre-fill State booleans
+    if (edit != null) {
+      _isLecture = edit.isLecture;
+      _isRecurring = edit.isRecurring;
+      _selectedDuration = edit.durationInMinutes;
+      if (edit.instructor.isNotEmpty) {
+        _isInstructorLocked = true;
+      }
+    }
+  }
 
   String _toTitleCase(String text) {
     if (text.isEmpty) return text;
@@ -46,15 +86,28 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   }
 
   Future<void> _selectTime() async {
+    TimeOfDay initial = TimeOfDay.now();
+    if (_startTimeController.text.isNotEmpty) {
+      try {
+        final parts = _startTimeController.text.split(':');
+        initial = TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        );
+      } catch (_) {}
+    }
+
     final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: initial,
       builder: (context, child) =>
           Theme(data: Theme.of(context), child: child!),
     );
     if (picked != null) {
-      _startTimeController.text =
-          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      setState(() {
+        _startTimeController.text =
+            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      });
     }
   }
 
@@ -72,15 +125,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
         });
       }
     } else {
-      if (_isInstructorLocked) {
-        setState(() {
-          _instructorController.clear();
-          _isInstructorLocked = false;
-        });
+      if (_isInstructorLocked && !_isLecture) {
+        setState(() => _isInstructorLocked = false);
       }
     }
   }
 
+  // UPDATED: Added Cancel Button logic
   Future<bool?> _showProfessionalConfirmDialog(
     BuildContext context,
     String course,
@@ -89,15 +140,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).primaryColor;
-
-    // UI FIX: Use DeepPurpleAccent for Dark Mode so it pops, Primary for Light
     final highlightColor = isDark ? Colors.deepPurpleAccent : primaryColor;
 
-    return showDialog<bool>(
+    return showDialog<bool?>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Dialog(
-        // UI FIX: Match the dark background of the main dialog (0xFF1E1E1E)
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
@@ -105,14 +153,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // UI FIX: Purple Circle Background
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: highlightColor.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                // UI FIX: Purple Icon
                 child: Icon(Icons.school, size: 32, color: highlightColor),
               ),
               const SizedBox(height: 16),
@@ -133,6 +179,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 ),
               ),
               const SizedBox(height: 20),
+              // Comparison Box
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -218,8 +265,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor:
-                            highlightColor, // UI FIX: Purple Button
+                        backgroundColor: highlightColor,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -235,6 +281,15 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              // ADDED: Cancel Button
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null), // null means cancel
+                child: Text(
+                  "Cancel",
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
               ),
             ],
           ),
@@ -262,16 +317,23 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     String finalInstructor = _toTitleCase(_instructorController.text.trim());
 
     bool performGlobalUpdate = false;
+
+    // Check for professor change
     if (existingKey.isNotEmpty && _isLecture) {
       final oldInstructor = widget.courseDatabase[existingKey]!;
       if (oldInstructor.isNotEmpty && oldInstructor != finalInstructor) {
-        final shouldUpdateGlobal = await _showProfessionalConfirmDialog(
+        final result = await _showProfessionalConfirmDialog(
           context,
           finalCourseName,
           oldInstructor,
           finalInstructor,
         );
-        performGlobalUpdate = shouldUpdateGlobal ?? false;
+
+        if (result == null) {
+          // User clicked Cancel, abort save
+          return;
+        }
+        performGlobalUpdate = result;
       }
     }
 
@@ -286,6 +348,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     final dateString = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
     final newLesson = Lesson(
+      id: widget.lessonToEdit?.id,
       userId: 'test_user',
       name: finalCourseName,
       room: _isLecture ? _roomController.text : '',
@@ -293,25 +356,27 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       description: _isLecture ? '' : _descriptionController.text,
       isLecture: _isLecture,
       isRecurring: _isRecurring,
-      dayOfWeek: dayName,
+      dayOfWeek: widget.lessonToEdit?.dayOfWeek ?? dayName,
       startTimeInMinutes: startMin,
       durationInMinutes: _selectedDuration,
       specificDate: _isRecurring ? '' : dateString,
+      excludeDates: widget.lessonToEdit?.excludeDates ?? [],
     );
 
     try {
       if (performGlobalUpdate) {
-        widget.onUpdateGlobal(finalCourseName, finalInstructor);
+        await widget.onUpdateGlobal(finalCourseName, finalInstructor);
       }
       widget.onAddLesson(newLesson);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      print("Error saving: $e");
+      debugPrint("Error saving: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.lessonToEdit != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).primaryColor;
     final accentColor = isDark ? Colors.deepPurpleAccent : primaryColor;
@@ -321,8 +386,11 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       scrollable: true,
       backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Center(
-        child: Text('Add Event', style: TextStyle(fontWeight: FontWeight.bold)),
+      title: Center(
+        child: Text(
+          isEditing ? 'Edit Event' : 'Add Event',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
       content: SizedBox(
@@ -410,9 +478,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
             ),
             const SizedBox(height: 12),
             Autocomplete<String>(
+              initialValue: TextEditingValue(
+                text: widget.lessonToEdit?.name ?? '',
+              ),
               optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text == '')
+                if (textEditingValue.text == '') {
                   return const Iterable<String>.empty();
+                }
                 return widget.courseDatabase.keys.where(
                   (String option) => option.toLowerCase().contains(
                     textEditingValue.text.toLowerCase(),
@@ -423,6 +495,11 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               fieldViewBuilder:
                   (context, controller, focusNode, onFieldSubmitted) {
                     _courseNameController = controller;
+                    if (widget.lessonToEdit != null &&
+                        controller.text.isEmpty &&
+                        _courseNameController.text.isEmpty) {
+                      controller.text = widget.lessonToEdit!.name;
+                    }
                     return TextField(
                       controller: controller,
                       focusNode: focusNode,
@@ -550,6 +627,30 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 controlAffinity: ListTileControlAffinity.leading,
               ),
             ),
+            if (isEditing && widget.onDelete != null) ...[
+              const SizedBox(height: 20),
+              const Divider(),
+              TextButton.icon(
+                onPressed: () {
+                  widget.onDelete!(widget.lessonToEdit!.id!);
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                label: const Text(
+                  "Delete Event",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -567,7 +668,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: const Text('Save'),
+          child: Text(isEditing ? 'Save Changes' : 'Save'),
         ),
       ],
     );

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/finance_models.dart';
 
 class AddTransactionDialog extends StatefulWidget {
-  final List<dynamic> buckets;
-  final Function(Map<String, dynamic>) onAdd;
+  final List<FinanceBucket> buckets;
+  final FinanceTransaction? transactionToEdit;
 
   const AddTransactionDialog({
     super.key,
     required this.buckets,
-    required this.onAdd,
+    this.transactionToEdit,
   });
 
   @override
@@ -28,7 +30,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   bool _showSubscriptionDropdown = false;
   Map<String, dynamic>? _selectedSubscription;
 
-  // RICH SUBSCRIPTION OPTIONS (Removed iCloud)
+  // --- RESTORED QUICK OPTIONS ---
+  final List<Map<String, dynamic>> _quickAddExpenseOptions = [
+    {'icon': '☕', 'title': 'Coffee', 'amount': '4.50', 'category': 'Dining'},
+    {'icon': '🍔', 'title': 'Lunch', 'amount': '12.00', 'category': 'Dining'},
+    {'icon': '🥦', 'title': 'Market', 'amount': '', 'category': 'Groceries'},
+    {'icon': '🚌', 'title': 'Bus', 'amount': '2.50', 'category': 'Transport'},
+  ];
+
   final List<Map<String, dynamic>> _subscriptionOptions = [
     {'name': 'Netflix', 'icon': Icons.tv_rounded, 'color': Colors.red},
     {
@@ -58,7 +67,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     },
   ];
 
-  // RICH INCOME CATEGORIES
   final List<Map<String, dynamic>> _incomeOptions = [
     {
       'name': 'Allowance',
@@ -71,83 +79,42 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     {'name': 'Other', 'icon': Icons.attach_money_rounded, 'color': Colors.teal},
   ];
 
-  // Quick Chips: EXPENSE (Mapped to Category Names)
-  final List<Map<String, dynamic>> _quickAddExpenseOptions = [
-    {'icon': '☕', 'title': 'Coffee', 'amount': '4.50', 'category': 'Dining'},
-    {'icon': '🍔', 'title': 'Lunch', 'amount': '12.00', 'category': 'Dining'},
-    {'icon': '🥦', 'title': 'Market', 'amount': '', 'category': 'Groceries'},
-    {'icon': '🚌', 'title': 'Bus', 'amount': '2.50', 'category': 'Transport'},
-  ];
-
-  // Quick Chips: INCOME (Mapped to Source Names)
-  final List<Map<String, dynamic>> _quickAddIncomeOptions = [
-    {
-      'icon': '👨‍👩‍👦',
-      'title': 'Allowance',
-      'amount': '200.00',
-      'category': 'Allowance',
-    },
-    {'icon': '💼', 'title': 'Wage', 'amount': '', 'category': 'Wage'},
-    {'icon': '🎁', 'title': 'Gift', 'amount': '50.00', 'category': 'Gift'},
-  ];
-
   @override
   void initState() {
     super.initState();
-    if (widget.buckets.isNotEmpty) {
-      _selectedBucketId = widget.buckets.first.id;
-      _checkIfSubscription(widget.buckets.first);
+    // PRE-FILL DATA IF EDITING
+    if (widget.transactionToEdit != null) {
+      final t = widget.transactionToEdit!;
+      _titleController.text = t.title;
+      _amountController.text = t.amount.toString();
+      _selectedDate = t.date;
+      _isExpense = t.isExpense;
+
+      if (_isExpense) {
+        _selectedBucketId = t.categoryId;
+        try {
+          final bucket = widget.buckets.firstWhere((b) => b.id == t.categoryId);
+          _checkIfSubscription(bucket);
+        } catch (_) {}
+      } else {
+        _selectedIncomeCategory = _incomeOptions.first;
+      }
+    } else {
+      if (widget.buckets.isNotEmpty) {
+        _selectedBucketId = widget.buckets.first.id;
+        _checkIfSubscription(widget.buckets.first);
+      }
+      _selectedIncomeCategory = _incomeOptions.first;
     }
-    _selectedIncomeCategory = _incomeOptions.first;
   }
 
-  void _checkIfSubscription(dynamic bucket) {
+  void _checkIfSubscription(FinanceBucket bucket) {
     setState(() {
       _showSubscriptionDropdown = bucket.name == 'Subscriptions';
-      if (_showSubscriptionDropdown) {
+      if (_showSubscriptionDropdown && _titleController.text.isEmpty) {
         _titleController.clear();
       }
     });
-  }
-
-  void _submit() {
-    if (_amountController.text.isEmpty) return;
-    if (_isExpense && _selectedBucketId == null) return;
-    if (!_isExpense && _selectedIncomeCategory == null) return;
-
-    String finalTitle = _titleController.text;
-
-    // Auto-fill title from Subscription
-    if (_isExpense &&
-        _showSubscriptionDropdown &&
-        _selectedSubscription != null) {
-      finalTitle = _selectedSubscription!['name'];
-    }
-
-    // Auto-fill Income Title if empty
-    if (!_isExpense) {
-      if (_titleController.text.isNotEmpty) {
-        finalTitle = _titleController.text;
-      } else {
-        finalTitle = _selectedIncomeCategory!['name'];
-      }
-    }
-
-    if (finalTitle.isEmpty && _isExpense) return;
-
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-
-    widget.onAdd({
-      'title': finalTitle,
-      'amount': amount,
-      'isExpense': _isExpense,
-      'bucketId': _isExpense ? _selectedBucketId : 'income',
-      'categoryIcon': _isExpense ? null : _selectedIncomeCategory!['icon'],
-      'categoryColor': _isExpense ? null : _selectedIncomeCategory!['color'],
-      'date': _selectedDate,
-    });
-
-    Navigator.pop(context);
   }
 
   void _applyQuickAdd(Map<String, dynamic> option) {
@@ -156,33 +123,102 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       if (option['amount'].isNotEmpty) {
         _amountController.text = option['amount'];
       }
+      _isExpense = true;
+      _showSubscriptionDropdown = false;
 
-      // LOGIC: SWITCH MODE & SELECT CATEGORY AUTOMATICALLY
-      if (_quickAddIncomeOptions.contains(option)) {
-        // --- INCOME MODE ---
-        _isExpense = false;
-        // Find matching income category by name
-        final match = _incomeOptions.firstWhere(
-          (cat) => cat['name'] == option['category'],
-          orElse: () => _incomeOptions.first,
+      // Find matching bucket by name
+      try {
+        final match = widget.buckets.firstWhere(
+          (b) => b.name == option['category'],
         );
-        _selectedIncomeCategory = match;
-      } else {
-        // --- EXPENSE MODE ---
-        _isExpense = true;
-        _showSubscriptionDropdown = false;
-
-        // Find matching bucket by name (e.g., "Bus" chip -> "Transport" bucket)
-        try {
-          final match = widget.buckets.firstWhere(
-            (b) => b.name == option['category'],
-          );
-          _selectedBucketId = match.id;
-        } catch (e) {
-          // If no match found, keep current selection
-        }
+        _selectedBucketId = match.id;
+      } catch (e) {
+        // No match found, keep current
       }
     });
+  }
+
+  Future<void> _deleteTransaction() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Transaction"),
+        content: const Text("Are you sure you want to delete this?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && widget.transactionToEdit != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('finance_transactions')
+            .doc(widget.transactionToEdit!.id)
+            .delete();
+        if (mounted) Navigator.pop(context); // Close dialog
+      } catch (e) {
+        print("Error deleting: $e");
+      }
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_amountController.text.isEmpty) return;
+    if (_isExpense && _selectedBucketId == null) return;
+
+    String finalTitle = _titleController.text;
+
+    // Auto-fill title
+    if (_isExpense &&
+        _showSubscriptionDropdown &&
+        _selectedSubscription != null) {
+      finalTitle = _selectedSubscription!['name'];
+    }
+    if (!_isExpense && finalTitle.isEmpty && _selectedIncomeCategory != null) {
+      finalTitle = _selectedIncomeCategory!['name'];
+    }
+    if (finalTitle.isEmpty) finalTitle = "Transaction";
+
+    final amount = double.tryParse(_amountController.text) ?? 0.0;
+
+    final Map<String, dynamic> data = {
+      'title': finalTitle,
+      'amount': amount,
+      'isExpense': _isExpense,
+      'categoryId': _isExpense ? _selectedBucketId : 'income',
+      'date': Timestamp.fromDate(_selectedDate),
+      'userId': 'test_user',
+    };
+
+    if (!_isExpense && _selectedIncomeCategory != null) {
+      data['iconCode'] =
+          (_selectedIncomeCategory!['icon'] as IconData).codePoint;
+      data['colorValue'] = (_selectedIncomeCategory!['color'] as Color).value;
+    }
+
+    try {
+      final collection = FirebaseFirestore.instance.collection(
+        'finance_transactions',
+      );
+
+      if (widget.transactionToEdit != null) {
+        await collection.doc(widget.transactionToEdit!.id).update(data);
+      } else {
+        await collection.add(data);
+      }
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      print("Error saving: $e");
+    }
   }
 
   @override
@@ -191,10 +227,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     final primaryColor = Colors.green;
     final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
-
-    final currentQuickOptions = _isExpense
-        ? _quickAddExpenseOptions
-        : _quickAddIncomeOptions;
+    final isEditing = widget.transactionToEdit != null;
 
     return AlertDialog(
       backgroundColor: bgColor,
@@ -203,7 +236,9 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       contentPadding: const EdgeInsets.all(20),
       title: Center(
         child: Text(
-          _isExpense ? "New Expense" : "New Income",
+          isEditing
+              ? "Edit Transaction"
+              : (_isExpense ? "New Expense" : "New Income"),
           style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
       ),
@@ -275,32 +310,34 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           ),
           const SizedBox(height: 16),
 
-          // 2. Quick Add Chips
-          SizedBox(
-            height: 40,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: currentQuickOptions.map((opt) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ActionChip(
-                      backgroundColor: isDark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade100,
-                      label: Text("${opt['icon']} ${opt['title']}"),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 0,
+          // 2. QUICK ADD CHIPS (RESTORED)
+          if (_isExpense) ...[
+            SizedBox(
+              height: 40,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _quickAddExpenseOptions.map((opt) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ActionChip(
+                        backgroundColor: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade100,
+                        label: Text("${opt['icon']} ${opt['title']}"),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 0,
+                        ),
+                        onPressed: () => _applyQuickAdd(opt),
                       ),
-                      onPressed: () => _applyQuickAdd(opt),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
 
           // 3. Amount Input
           TextField(
@@ -325,7 +362,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           ),
           const SizedBox(height: 16),
 
-          // 4. Category Dropdown
+          // 4. Category / Source Dropdown
           if (_isExpense)
             DropdownButtonFormField<String>(
               value: _selectedBucketId,
@@ -345,8 +382,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               onChanged: (val) {
                 setState(() {
                   _selectedBucketId = val;
-                  final bucket = widget.buckets.firstWhere((b) => b.id == val);
-                  _checkIfSubscription(bucket);
+                  if (val != null) {
+                    try {
+                      final bucket = widget.buckets.firstWhere(
+                        (b) => b.id == val,
+                      );
+                      _checkIfSubscription(bucket);
+                    } catch (_) {}
+                  }
                 });
               },
               decoration: InputDecoration(
@@ -365,14 +408,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   value: cat,
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: (cat['color'] as Color).withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(cat['icon'], size: 16, color: cat['color']),
-                      ),
+                      Icon(cat['icon'], size: 16, color: cat['color']),
                       const SizedBox(width: 10),
                       Text(cat['name'], style: TextStyle(color: textColor)),
                     ],
@@ -387,7 +423,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
               ),
             ),
-
           const SizedBox(height: 12),
 
           // 5. Title / Subscription
@@ -417,7 +452,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               },
               decoration: InputDecoration(
                 labelText: "Subscription Name",
-                prefixIcon: const Icon(Icons.subscriptions_rounded),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -429,7 +463,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               style: TextStyle(color: textColor),
               decoration: InputDecoration(
                 labelText: "Title (Optional)",
-                prefixIcon: const Icon(Icons.edit_note_rounded),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -438,7 +471,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                     : "e.g. Monthly Allowance",
               ),
             ),
-
           const SizedBox(height: 12),
 
           // 6. Date Picker
@@ -474,6 +506,19 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
               ),
             ),
           ),
+
+          // 7. DELETE BUTTON (BLUE CIRCLE REQUEST)
+          if (isEditing) ...[
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: _deleteTransaction,
+              icon: const Icon(Icons.delete, color: Colors.red),
+              label: const Text(
+                "Delete Transaction",
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
         ],
       ),
       actions: [

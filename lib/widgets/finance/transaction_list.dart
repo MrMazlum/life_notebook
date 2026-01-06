@@ -1,163 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../models/finance_models.dart';
 
 class TransactionList extends StatelessWidget {
-  final List<dynamic> transactions;
-  final List<dynamic> buckets;
+  final List<FinanceTransaction> transactions;
+  final List<FinanceBucket> buckets;
   final bool isDark;
+  // Callback for the edit button
+  final Function(FinanceTransaction) onEdit;
 
   const TransactionList({
     super.key,
     required this.transactions,
     required this.buckets,
     required this.isDark,
+    required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final subTextColor = isDark ? Colors.white54 : Colors.grey;
-
     if (transactions.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Center(
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
           child: Text(
-            "No transactions.",
-            style: TextStyle(color: subTextColor),
+            "No transactions yet.",
+            style: TextStyle(color: Colors.grey.shade500),
           ),
         ),
       );
     }
 
-    // Grouping Logic
-    final Map<int, List<dynamic>> weeklyGroups = {};
-    for (var t in transactions) {
-      final dayOfYear = int.parse(DateFormat("D").format(t.date));
-      final weekNum = (dayOfYear / 7).ceil();
-      weeklyGroups.putIfAbsent(weekNum, () => []).add(t);
-    }
-    final sortedWeeks = weeklyGroups.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: transactions.length,
+      itemBuilder: (context, index) {
+        final tx = transactions[index];
 
-    return Column(
-      children: sortedWeeks.map((weekNum) {
-        final weekTransactions = weeklyGroups[weekNum]!;
-        weekTransactions.sort((a, b) => b.date.compareTo(a.date));
+        // Match bucket for color/icon logic
+        FinanceBucket? bucket;
+        if (tx.isExpense) {
+          try {
+            bucket = buckets.firstWhere((b) => b.id == tx.categoryId);
+          } catch (_) {}
+        }
 
-        final weekTotal = weekTransactions.fold(
-          0.0,
-          (sum, t) => sum + (t.isExpense ? -t.amount : t.amount),
-        );
+        final color = tx.isExpense
+            ? (bucket?.color ?? Colors.grey)
+            : (tx.color ?? Colors.green);
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // NEW DESIGN: Sleek Week Header
-            Container(
-              margin: const EdgeInsets.only(top: 16, bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey.shade900 : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(12),
+        final icon = tx.isExpense
+            ? (bucket?.icon ?? Icons.category)
+            : (tx.icon ?? Icons.attach_money);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            ],
+          ),
+          child: Row(
+            children: [
+              // Icon Box
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 16),
+
+              // Title & Date
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tx.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('MMM d, h:mm a').format(tx.date),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Price & Edit Button
+              Row(
                 children: [
                   Text(
-                    "Week $weekNum",
+                    "${tx.isExpense ? '-' : '+'}\$${tx.amount.toStringAsFixed(2)}",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: subTextColor,
-                      fontSize: 13,
+                      fontSize: 16,
+                      color: tx.isExpense
+                          ? (isDark ? Colors.white70 : Colors.black87)
+                          : Colors.green,
                     ),
                   ),
-                  Text(
-                    "${weekTotal >= 0 ? '+' : ''}\$${weekTotal.abs().toStringAsFixed(0)}",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: weekTotal >= 0
-                          ? Colors.green
-                          : (isDark ? Colors.redAccent.shade100 : Colors.red),
-                      fontSize: 13,
+                  const SizedBox(width: 12),
+
+                  // --- BLUE CIRCLE REQUEST: EDIT BUTTON ---
+                  GestureDetector(
+                    onTap: () => onEdit(tx),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.edit_rounded,
+                        size: 14,
+                        color: isDark ? Colors.white54 : Colors.grey,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-
-            // List Items
-            ...weekTransactions
-                .map((t) => _buildTransactionCard(t, context))
-                .toList(),
-          ],
+            ],
+          ),
         );
-      }).toList(),
-    );
-  }
-
-  Widget _buildTransactionCard(dynamic t, BuildContext context) {
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final subTextColor = isDark ? Colors.white54 : Colors.grey;
-
-    Color color;
-    IconData icon;
-
-    if (t.isExpense) {
-      dynamic bucket;
-      try {
-        bucket = buckets.firstWhere((b) => b.id == t.categoryId);
-      } catch (e) {
-        bucket = null;
-      }
-      color = bucket != null ? bucket.color : Colors.grey;
-      icon = bucket != null ? bucket.icon : Icons.help_outline;
-    } else {
-      color = t.color ?? Colors.green;
-      icon = t.icon ?? Icons.attach_money;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 0,
-        ), // Tighter padding
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        title: Text(
-          t.title,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-            fontSize: 15,
-          ),
-        ),
-        subtitle: Text(
-          DateFormat('MMM d').format(t.date),
-          style: TextStyle(color: subTextColor, fontSize: 12),
-        ),
-        trailing: Text(
-          "${t.isExpense ? '-' : '+'}\$${t.amount.toStringAsFixed(2)}",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: t.isExpense ? Colors.redAccent : Colors.green,
-          ),
-        ),
-      ),
+      },
     );
   }
 }

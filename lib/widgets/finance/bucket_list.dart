@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'budget_progress_bar.dart'; // IMPORT
+import 'budget_progress_bar.dart';
+import '../../models/finance_models.dart'; // Ensure this points to your new file
 
 class BucketList extends StatelessWidget {
-  final List<dynamic> buckets;
+  final List<FinanceBucket> buckets;
   final String? selectedBucketId;
   final Function(String?) onBucketSelected;
 
@@ -18,7 +19,6 @@ class BucketList extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final subTextColor = isDark ? Colors.white54 : Colors.grey;
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -46,10 +46,7 @@ class BucketList extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top: Icon
                 Icon(bucket.icon, color: bucket.color, size: 28),
-
-                // Middle: Text
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -61,6 +58,7 @@ class BucketList extends StatelessWidget {
                         color: textColor,
                       ),
                       maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -73,15 +71,12 @@ class BucketList extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                // Bottom: Complex Bar
                 BudgetProgressBar(
                   spent: bucket.spent,
                   limit: bucket.limit,
                   color: bucket.color,
                   isFixed: bucket.isFixed,
-                  showLabels:
-                      false, // Keep card clean, detailed view is in header
+                  showLabels: false,
                 ),
               ],
             ),

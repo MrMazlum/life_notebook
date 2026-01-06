@@ -3,9 +3,9 @@ import '../../models/lesson.dart';
 
 class ClassCard extends StatelessWidget {
   final Lesson lesson;
-  final VoidCallback? onDelete; // NEW: Callback for delete action
+  final VoidCallback? onEdit; // Renamed from onDelete to onEdit
 
-  const ClassCard({super.key, required this.lesson, this.onDelete});
+  const ClassCard({super.key, required this.lesson, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -14,21 +14,14 @@ class ClassCard extends StatelessWidget {
     final textColor = isDark ? Colors.white : Colors.black;
     final subTextColor = isDark ? Colors.white70 : Colors.grey.shade600;
     final cardBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
-
     final typeColor = lesson.isLecture ? primaryColor : Colors.teal;
-    final typeIcon = lesson.isLecture
-        ? Icons.class_outlined
-        : (lesson.name.toLowerCase().contains('gym')
-              ? Icons.fitness_center
-              : Icons.edit_note);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // A. Time Column
+          // TIME
           SizedBox(
             width: 60,
             child: Column(
@@ -49,8 +42,7 @@ class ClassCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // B. Visual Line
+          // LINE
           Column(
             children: [
               Container(
@@ -60,10 +52,6 @@ class ClassCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: typeColor,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    width: 2,
-                    color: isDark ? const Color(0xFF121212) : Colors.white,
-                  ),
                 ),
               ),
               Container(
@@ -74,22 +62,22 @@ class ClassCard extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 12),
-
-          // C. Content Card
+          // CARD
           Expanded(
             child: Card(
               color: cardBgColor,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: borderColor),
+                side: BorderSide(
+                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header: Name & DELETE BUTTON
                     Row(
                       children: [
                         Expanded(
@@ -103,22 +91,19 @@ class ClassCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // DELETE BUTTON
-                        if (onDelete != null)
+                        // EDIT BUTTON
+                        if (onEdit != null)
                           GestureDetector(
-                            onTap: onDelete,
+                            onTap: onEdit,
                             child: Icon(
-                              Icons.delete_outline,
+                              Icons.edit_outlined,
                               size: 20,
                               color: Colors.grey.shade500,
                             ),
                           ),
                       ],
                     ),
-
                     const SizedBox(height: 8),
-
-                    // Context info
                     if (lesson.isLecture) ...[
                       Row(
                         children: [
@@ -158,27 +143,6 @@ class ClassCard extends StatelessWidget {
                           ),
                         ),
                     ],
-
-                    const SizedBox(height: 8),
-                    // Tag
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        "${lesson.durationInMinutes} min",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: typeColor,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

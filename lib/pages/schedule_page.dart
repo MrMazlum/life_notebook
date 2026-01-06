@@ -18,10 +18,7 @@ class _SchedulePageState extends State<SchedulePage> {
   final CollectionReference _lessonsRef = FirebaseFirestore.instance.collection(
     'lessons',
   );
-
   late Stream<QuerySnapshot> _lessonsStream;
-
-  // FIX: This variable stores the course info so FAB can access it
   Map<String, String> _smartCourseDatabase = {};
 
   @override
@@ -32,8 +29,12 @@ class _SchedulePageState extends State<SchedulePage> {
         .snapshots();
   }
 
-  void _addLessonToFirestore(Lesson lesson) {
-    _lessonsRef.add(lesson.toMap());
+  void _saveLessonToFirestore(Lesson lesson) {
+    if (lesson.id != null) {
+      _lessonsRef.doc(lesson.id).update(lesson.toMap());
+    } else {
+      _lessonsRef.add(lesson.toMap());
+    }
   }
 
   Future<void> _updateGlobalInstructor(
@@ -49,99 +50,241 @@ class _SchedulePageState extends State<SchedulePage> {
       batch.update(doc.reference, {'instructor': newInstructor});
     }
     await batch.commit();
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Updated instructor for ${querySnapshot.docs.length} classes!',
-          ),
-        ),
+        const SnackBar(content: Text('Updated global instructors!')),
       );
     }
   }
 
-  void _confirmDelete(Lesson lesson) {
-    if (!lesson.isRecurring) {
-      _deleteForever(lesson.id!);
-      return;
-    }
+  // --- DELETE LOGIC & UI ---
 
+  void _handleDeleteRequest(String lessonId) {
+    _lessonsRef.doc(lessonId).get().then((doc) {
+      if (doc.exists) {
+        final lesson = Lesson.fromFirestore(doc);
+        _confirmDeleteLogic(lesson);
+      }
+    });
+  }
+
+  // UPDATED: Now shows a beautiful dialog for both recurring and one-time events
+  void _confirmDeleteLogic(Lesson lesson) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).primaryColor;
-    final accentColor = isDark ? Colors.deepPurpleAccent : primaryColor;
     final dateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
+    // Common styling for the delete dialog to match "Professor Changed"
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: const Text("Delete Event"),
-        content: Text(
-          "Do you want to delete this specific session or the entire series?",
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteOnlyThisSession(lesson.id!, dateString);
-            },
-            child: Text("Only This", style: TextStyle(color: accentColor)),
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteForever(lesson.id!);
-            },
-            child: const Text(
-              "All Future",
-              style: TextStyle(color: Colors.red),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_forever,
+                    size: 32,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  lesson.isRecurring ? "Delete Recurring?" : "Delete Event?",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Subtitle
+                Text(
+                  lesson.isRecurring
+                      ? "Delete only this session or the entire series?"
+                      : "Are you sure you want to delete '${lesson.name}'?",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Buttons
+                if (lesson.isRecurring) ...[
+                  // RECURRING BUTTONS
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx); // Close dialog
+                            _lessonsRef.doc(lesson.id).update({
+                              'excludeDates': FieldValue.arrayUnion([
+                                dateString,
+                              ]),
+                            });
+                          },
+                          child: Text(
+                            "Only This",
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Colors.redAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            // This deletes the doc, so it wipes past & future.
+                            // Renaming button to "Delete Series" for clarity.
+                            _lessonsRef.doc(lesson.id).delete();
+                          },
+                          child: const Text(
+                            "Delete Series",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  // ONE-TIME EVENT BUTTONS
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(
+                              color: isDark
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(ctx), // Just cancel
+                          child: Text(
+                            "Keep",
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Colors.redAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _lessonsRef.doc(lesson.id).delete();
+                          },
+                          child: const Text(
+                            "Delete",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+
+                // MAIN CANCEL BUTTON (Bottom)
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.grey.shade500),
+                  ),
+                ),
+              ],
             ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _deleteForever(String id) {
-    _lessonsRef.doc(id).delete();
-  }
-
-  void _deleteOnlyThisSession(String id, String dateToExclude) {
-    _lessonsRef.doc(id).update({
-      'excludeDates': FieldValue.arrayUnion([dateToExclude]),
-    });
+  void _openLessonDialog({Lesson? lesson}) {
+    showDialog(
+      context: context,
+      builder: (_) => AddLessonDialog(
+        selectedDate: _selectedDate,
+        courseDatabase: _smartCourseDatabase,
+        onAddLesson: _saveLessonToFirestore,
+        onUpdateGlobal: _updateGlobalInstructor,
+        lessonToEdit: lesson,
+        onDelete: _handleDeleteRequest,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).primaryColor;
-    final accentColor = isDark ? Colors.deepPurpleAccent : primaryColor;
-
-    final String dayName = DateFormat('EEEE').format(_selectedDate);
-    final String dateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final accentColor = isDark
+        ? Colors.deepPurpleAccent
+        : Theme.of(context).primaryColor;
+    final dayName = DateFormat('EEEE').format(_selectedDate);
+    final dateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // NOW PASSING THE REAL DATABASE
-          showDialog(
-            context: context,
-            builder: (_) => AddLessonDialog(
-              selectedDate: _selectedDate,
-              courseDatabase: _smartCourseDatabase,
-              onAddLesson: _addLessonToFirestore,
-              onUpdateGlobal: _updateGlobalInstructor,
-            ),
-          );
-        },
+        onPressed: () => _openLessonDialog(), // ADD MODE
         backgroundColor: accentColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -152,9 +295,7 @@ class _SchedulePageState extends State<SchedulePage> {
             onDateSelected: (newDate) =>
                 setState(() => _selectedDate = newDate),
           ),
-
           const SizedBox(height: 10),
-
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _lessonsStream,
@@ -169,21 +310,21 @@ class _SchedulePageState extends State<SchedulePage> {
                         .toList() ??
                     [];
 
-                // FIX: Populate the member variable for the FAB to use
+                // Refresh Smart Database
                 _smartCourseDatabase = {};
-                for (var lesson in allLessons) {
-                  if (lesson.isLecture && lesson.name.isNotEmpty) {
-                    _smartCourseDatabase[lesson.name] = lesson.instructor;
+                for (var l in allLessons) {
+                  if (l.isLecture && l.name.isNotEmpty) {
+                    _smartCourseDatabase[l.name] = l.instructor;
                   }
                 }
 
+                // Filter Logic
                 final daysLessons = allLessons.where((l) {
                   if (l.isRecurring) {
                     return l.dayOfWeek == dayName &&
                         !l.excludeDates.contains(dateString);
-                  } else {
-                    return l.specificDate == dateString;
                   }
+                  return l.specificDate == dateString;
                 }).toList();
 
                 daysLessons.sort(
@@ -194,7 +335,7 @@ class _SchedulePageState extends State<SchedulePage> {
                 if (daysLessons.isEmpty) {
                   return Center(
                     child: Text(
-                      "No plans for $dayName. ☕",
+                      "No plans for $dayName.",
                       style: TextStyle(color: Colors.grey.withOpacity(0.8)),
                     ),
                   );
@@ -207,7 +348,8 @@ class _SchedulePageState extends State<SchedulePage> {
                     final lesson = daysLessons[index];
                     return ClassCard(
                       lesson: lesson,
-                      onDelete: () => _confirmDelete(lesson),
+                      onEdit: () =>
+                          _openLessonDialog(lesson: lesson), // EDIT MODE
                     );
                   },
                 );

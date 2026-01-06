@@ -1,64 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+// MODELS
+import '../models/finance_models.dart';
+
+// WIDGETS
 import '../widgets/finance/bucket_list.dart';
 import '../widgets/finance/transaction_list.dart';
 import '../widgets/finance/pie_chart_view.dart';
 import '../widgets/finance/add_transaction_dialog.dart';
 import '../widgets/finance/budget_progress_bar.dart';
-
-// --- MOCK MODELS ---
-class MockBucket {
-  final String id;
-  final String name;
-  final double limit;
-  final double spent;
-  final IconData icon;
-  final Color color;
-  final bool isFixed;
-
-  MockBucket(
-    this.id,
-    this.name,
-    this.limit,
-    this.spent,
-    this.icon,
-    this.color, {
-    this.isFixed = false,
-  });
-
-  MockBucket copyWith({double? limit, double? spent}) {
-    return MockBucket(
-      id,
-      name,
-      limit ?? this.limit,
-      spent ?? this.spent,
-      icon,
-      color,
-      isFixed: isFixed,
-    );
-  }
-}
-
-class MockTransaction {
-  final String title;
-  final double amount;
-  final DateTime date;
-  final String categoryId;
-  final bool isExpense;
-  final IconData? icon;
-  final Color? color;
-
-  MockTransaction({
-    required this.title,
-    required this.amount,
-    required this.date,
-    required this.categoryId,
-    this.isExpense = true,
-    this.icon,
-    this.color,
-  });
-}
+import '../widgets/finance/past_month_summary.dart';
 
 enum FilterType { all, income, expense }
 
@@ -74,117 +26,102 @@ class _FinancePageState extends State<FinancePage> {
   bool _showChart = false;
   DateTime _selectedDate = DateTime.now();
   FilterType _currentFilter = FilterType.all;
-
-  // NEW: Track if we are "Inspecting" a past month details
   bool _isInspectingPast = false;
 
-  // --- DATA ---
-  List<MockBucket> _baseBuckets = [
-    MockBucket(
-      '2',
-      'Rent',
-      800.0,
-      0,
-      Icons.home_rounded,
-      Colors.blue,
+  // --- TEMPORARY DATA FOR UI VERIFICATION ---
+  List<FinanceBucket> _baseBuckets = [
+    FinanceBucket(
+      id: '2',
+      name: 'Rent',
+      limit: 800.0,
+      spent: 0,
+      iconCode: Icons.home_rounded.codePoint,
+      colorValue: Colors.blue.value,
       isFixed: true,
     ),
-    MockBucket(
-      '5',
-      'Subscriptions',
-      60.0,
-      0,
-      Icons.subscriptions_rounded,
-      Colors.teal,
+    FinanceBucket(
+      id: '5',
+      name: 'Subscriptions',
+      limit: 60.0,
+      spent: 0,
+      iconCode: Icons.subscriptions_rounded.codePoint,
+      colorValue: Colors.teal.value,
       isFixed: true,
     ),
-    MockBucket(
-      '1',
-      'Dining',
-      150.0,
-      0,
-      Icons.restaurant_rounded,
-      Colors.orange,
+    FinanceBucket(
+      id: '1',
+      name: 'Dining',
+      limit: 150.0,
+      spent: 0,
+      iconCode: Icons.restaurant_rounded.codePoint,
+      colorValue: Colors.orange.value,
     ),
-    MockBucket(
-      '6',
-      'Groceries',
-      200.0,
-      0,
-      Icons.shopping_cart_rounded,
-      Colors.green,
+    FinanceBucket(
+      id: '6',
+      name: 'Groceries',
+      limit: 200.0,
+      spent: 0,
+      iconCode: Icons.shopping_cart_rounded.codePoint,
+      colorValue: Colors.green.value,
     ),
-    MockBucket(
-      '4',
-      'Transport',
-      100.0,
-      0,
-      Icons.directions_bus_rounded,
-      Colors.indigo,
+    FinanceBucket(
+      id: '4',
+      name: 'Transport',
+      limit: 100.0,
+      spent: 0,
+      iconCode: Icons.directions_bus_rounded.codePoint,
+      colorValue: Colors.indigo.value,
     ),
-    MockBucket('3', 'Fun', 100.0, 0, Icons.movie_rounded, Colors.purple),
+    FinanceBucket(
+      id: '3',
+      name: 'Fun',
+      limit: 100.0,
+      spent: 0,
+      iconCode: Icons.movie_rounded.codePoint,
+      colorValue: Colors.purple.value,
+    ),
   ];
 
-  late List<MockBucket> _calculatedBuckets;
-  List<MockTransaction> _monthTransactions = [];
+  late List<FinanceBucket> _calculatedBuckets;
+  List<FinanceTransaction> _monthTransactions = [];
 
   double _monthlyIncome = 0;
   double _monthlyExpense = 0;
 
-  final List<MockTransaction> _allTransactions = [
-    // Current Month
-    MockTransaction(
+  final List<FinanceTransaction> _allTransactions = [
+    FinanceTransaction(
+      id: 't1',
       title: 'Rent Payment',
       amount: 800.00,
       date: DateTime.now(),
       categoryId: '2',
+      isExpense: true,
     ),
-    MockTransaction(
+    FinanceTransaction(
+      id: 't2',
       title: 'Grocery Run',
       amount: 45.00,
       date: DateTime.now(),
       categoryId: '6',
+      isExpense: true,
     ),
-    MockTransaction(
+    FinanceTransaction(
+      id: 't3',
       title: 'Burger King',
       amount: 12.50,
       date: DateTime.now().subtract(const Duration(days: 2)),
       categoryId: '1',
+      isExpense: true,
     ),
-    MockTransaction(
-      title: 'Bus Pass',
-      amount: 20.00,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      categoryId: '4',
-    ),
-
-    // Past Month (Mock Data for Testing)
-    MockTransaction(
-      title: 'Last Month Rent',
-      amount: 800.00,
-      date: DateTime.now().subtract(const Duration(days: 35)),
-      categoryId: '2',
-    ),
-    MockTransaction(
-      title: 'Holiday Travel',
-      amount: 150.00,
-      date: DateTime.now().subtract(const Duration(days: 32)),
-      categoryId: '4',
-    ),
-    MockTransaction(
-      title: 'Christmas Gift',
-      amount: 200.00,
-      date: DateTime.now().subtract(const Duration(days: 31)),
-      categoryId: '3',
-    ),
-    MockTransaction(
+    FinanceTransaction(
+      id: 't4',
       title: 'Bonus',
       amount: 500.00,
-      date: DateTime.now().subtract(const Duration(days: 33)),
+      date: DateTime.now().subtract(const Duration(days: 5)),
       categoryId: 'income',
       isExpense: false,
-      icon: Icons.card_giftcard,
-      color: Colors.amber,
+      iconCode: Icons.card_giftcard.codePoint,
+      colorValue: Colors.amber.value,
     ),
   ];
 
@@ -194,7 +131,6 @@ class _FinancePageState extends State<FinancePage> {
     _recalculateData();
   }
 
-  // Check if we are viewing the current actual month
   bool get _isCurrentMonth {
     final now = DateTime.now();
     return _selectedDate.year == now.year && _selectedDate.month == now.month;
@@ -207,7 +143,7 @@ class _FinancePageState extends State<FinancePage> {
         _selectedDate.month + offset,
         1,
       );
-      _isInspectingPast = false; // Reset inspection when changing months
+      _isInspectingPast = false;
       _recalculateData();
     });
   }
@@ -244,16 +180,15 @@ class _FinancePageState extends State<FinancePage> {
     });
   }
 
-  void _editBucketLimit(String bucketId) {
-    final bucket = _baseBuckets.firstWhere((b) => b.id == bucketId);
+  // UPDATED: Updates Local List so you can see it work instantly
+  void _updateBucketLimit(String bucketId, double currentLimit, String name) {
     final controller = TextEditingController(
-      text: bucket.limit.toStringAsFixed(0),
+      text: currentLimit.toStringAsFixed(0),
     );
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Set Budget: ${bucket.name}"),
+        title: Text("Edit Budget: $name"),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
@@ -266,15 +201,16 @@ class _FinancePageState extends State<FinancePage> {
           ),
           ElevatedButton(
             onPressed: () {
-              final newLimit = double.tryParse(controller.text) ?? bucket.limit;
+              final newLimit = double.tryParse(controller.text) ?? currentLimit;
+              // Update Locally for Verification
               setState(() {
                 final index = _baseBuckets.indexWhere((b) => b.id == bucketId);
                 if (index != -1) {
                   _baseBuckets[index] = _baseBuckets[index].copyWith(
                     limit: newLimit,
                   );
+                  _recalculateData();
                 }
-                _recalculateData();
               });
               Navigator.pop(ctx);
             },
@@ -285,89 +221,18 @@ class _FinancePageState extends State<FinancePage> {
     );
   }
 
-  void _showGlobalBudgetEditor() {
-    // ... [Same implementation as before] ...
-    showModalBottomSheet(
+  void _onEditTransaction(FinanceTransaction tx) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          height: 500,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const Text(
-                "Edit Monthly Budget",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _baseBuckets.length,
-                  itemBuilder: (context, index) {
-                    final bucket = _baseBuckets[index];
-                    return ListTile(
-                      leading: Icon(bucket.icon, color: bucket.color),
-                      title: Text(bucket.name),
-                      trailing: SizedBox(
-                        width: 100,
-                        child: TextFormField(
-                          initialValue: bucket.limit.toStringAsFixed(0),
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(prefixText: "\$ "),
-                          onChanged: (val) {
-                            final newLimit =
-                                double.tryParse(val) ?? bucket.limit;
-                            _baseBuckets[index] = bucket.copyWith(
-                              limit: newLimit,
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() => _recalculateData());
-                  Navigator.pop(ctx);
-                },
-                child: const Text("Done"),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) =>
+          AddTransactionDialog(buckets: _baseBuckets, transactionToEdit: tx),
     );
   }
 
   void _onAddTransaction() {
     showDialog(
       context: context,
-      builder: (context) => AddTransactionDialog(
-        buckets: _baseBuckets,
-        onAdd: (newTx) {
-          setState(() {
-            _allTransactions.insert(
-              0,
-              MockTransaction(
-                title: newTx['title'],
-                amount: newTx['amount'],
-                date: newTx['date'],
-                categoryId: newTx['bucketId'] ?? 'income',
-                isExpense: newTx['isExpense'],
-                icon: newTx['categoryIcon'],
-                color: newTx['categoryColor'],
-              ),
-            );
-            if (newTx['date'].month == _selectedDate.month) {
-              _recalculateData();
-            }
-          });
-        },
-      ),
+      builder: (context) => AddTransactionDialog(buckets: _baseBuckets),
     );
   }
 
@@ -380,7 +245,6 @@ class _FinancePageState extends State<FinancePage> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // HIDE ADD BUTTON IF VIEWING PAST MONTH
       floatingActionButton: _isCurrentMonth
           ? FloatingActionButton(
               onPressed: _onAddTransaction,
@@ -393,74 +257,21 @@ class _FinancePageState extends State<FinancePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. MONTH HEADER
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                        onPressed: () => _changeMonth(-1),
-                        color: subTextColor,
-                      ),
-                      Column(
-                        children: [
-                          Text(
-                            "Budget",
-                            style: TextStyle(fontSize: 12, color: subTextColor),
-                          ),
-                          Text(
-                            DateFormat('MMMM yyyy').format(_selectedDate),
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded, size: 28),
-                        onPressed: () => _changeMonth(1),
-                        color: subTextColor,
-                      ),
-                    ],
-                  ),
-                  if (_isCurrentMonth || _isInspectingPast)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          _buildToggleBtn(
-                            Icons.pie_chart_rounded,
-                            true,
-                            isDark,
-                            primaryColor,
-                          ),
-                          _buildToggleBtn(
-                            Icons.view_list_rounded,
-                            false,
-                            isDark,
-                            primaryColor,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // CONDITIONAL VIEW: PAST SUMMARY vs ACTIVE DASHBOARD
+            _buildMonthHeader(subTextColor, textColor),
             if (!_isCurrentMonth && !_isInspectingPast)
-              _buildPastMonthSummary(isDark, textColor, primaryColor)
+              PastMonthSummary(
+                selectedDate: _selectedDate,
+                income: _monthlyIncome,
+                expense: _monthlyExpense,
+                isDark: isDark,
+                onBackToToday: () {
+                  setState(() {
+                    _selectedDate = DateTime.now();
+                    _recalculateData();
+                  });
+                },
+                onInspect: () => setState(() => _isInspectingPast = true),
+              )
             else
               _buildMainDashboard(
                 isDark,
@@ -468,7 +279,6 @@ class _FinancePageState extends State<FinancePage> {
                 subTextColor,
                 primaryColor,
               ),
-
             const SizedBox(height: 80),
           ],
         ),
@@ -476,163 +286,80 @@ class _FinancePageState extends State<FinancePage> {
     );
   }
 
-  // --- VIEW 1: PAST MONTH SUMMARY CARD ---
-  Widget _buildPastMonthSummary(
-    bool isDark,
-    Color textColor,
-    Color primaryColor,
-  ) {
-    final netSavings = _monthlyIncome - _monthlyExpense;
-    final isPositive = netSavings >= 0;
-
+  Widget _buildMonthHeader(Color subTextColor, Color textColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Colors.green;
     return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const SizedBox(height: 20),
-          // Big Summary Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF1E1E1E), const Color(0xFF252525)]
-                    : [Colors.white, Colors.grey.shade50],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  isPositive ? Icons.savings_rounded : Icons.warning_rounded,
-                  size: 48,
-                  color: isPositive ? Colors.green : Colors.redAccent,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isPositive ? "Great Job!" : "Over Budget",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isPositive
-                      ? "You saved \$${netSavings.toStringAsFixed(0)} in ${DateFormat('MMMM').format(_selectedDate)}."
-                      : "You spent \$${netSavings.abs().toStringAsFixed(0)} more than you earned.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 32),
-
-                // Stats Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem("Income", _monthlyIncome, Colors.green),
-                    Container(
-                      width: 1,
-                      height: 40,
-                      color: Colors.grey.withOpacity(0.3),
-                    ),
-                    _buildStatItem(
-                      "Expense",
-                      _monthlyExpense,
-                      Colors.redAccent,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // Action Buttons
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime.now();
-                      _recalculateData();
-                    });
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    "Back to Today",
-                    style: TextStyle(color: textColor),
-                  ),
-                ),
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 28),
+                onPressed: () => _changeMonth(-1),
+                color: subTextColor,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() => _isInspectingPast = true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+              Column(
+                children: [
+                  Text(
+                    "Budget",
+                    style: TextStyle(fontSize: 12, color: subTextColor),
                   ),
-                  child: const Text(
-                    "Inspect Details",
+                  Text(
+                    DateFormat('MMMM yyyy').format(_selectedDate),
                     style: TextStyle(
-                      color: Colors.white,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
-                ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 28),
+                onPressed: () => _changeMonth(1),
+                color: subTextColor,
               ),
             ],
           ),
+          if (_isCurrentMonth || _isInspectingPast)
+            Container(
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  _buildToggleBtn(
+                    Icons.pie_chart_rounded,
+                    true,
+                    isDark,
+                    primaryColor,
+                  ),
+                  _buildToggleBtn(
+                    Icons.view_list_rounded,
+                    false,
+                    isDark,
+                    primaryColor,
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, double amount, Color color) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(
-          "\$${amount.toStringAsFixed(0)}",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- VIEW 2: ACTIVE DASHBOARD (Buckets, List, etc.) ---
   Widget _buildMainDashboard(
     bool isDark,
     Color textColor,
     Color subTextColor,
     Color primaryColor,
   ) {
-    // [Logic for Filter/Charts from before]
-    List<MockTransaction> displayedTransactions = _monthTransactions;
+    // Filter Logic
+    List<FinanceTransaction> displayedTransactions = _monthTransactions;
     if (_currentFilter == FilterType.expense) {
       displayedTransactions = displayedTransactions
           .where((t) => t.isExpense)
@@ -648,24 +375,22 @@ class _FinancePageState extends State<FinancePage> {
           .toList();
     }
 
-    final double chartTotal = _calculatedBuckets.fold(
-      0,
+    final chartTotal = _calculatedBuckets.fold(
+      0.0,
       (sum, item) => sum + item.spent,
     );
-    final List<ChartData> chartData = _calculatedBuckets.map((b) {
-      return ChartData(b.id, b.name, b.spent, b.color, b.icon);
-    }).toList();
-
-    final double totalBudgetLimit = _calculatedBuckets.fold(
+    final chartData = _calculatedBuckets
+        .map((b) => ChartData(b.id, b.name, b.spent, b.color, b.icon))
+        .toList();
+    final totalBudgetLimit = _calculatedBuckets.fold(
       0.0,
       (sum, b) => sum + b.limit,
     );
-    final double totalBudgetSpent = _calculatedBuckets.fold(
+    final totalBudgetSpent = _calculatedBuckets.fold(
       0.0,
       (sum, b) => sum + b.spent,
     );
 
-    // Smart Pacing Math
     final now = DateTime.now();
     final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
     final timeProgress = (now.day / daysInMonth).clamp(0.0, 1.0);
@@ -678,16 +403,17 @@ class _FinancePageState extends State<FinancePage> {
       }
     }
 
-    MockBucket? selectedBucket;
+    FinanceBucket? selectedBucket;
     if (_selectedBucketId != null) {
-      selectedBucket = _calculatedBuckets.firstWhere(
-        (b) => b.id == _selectedBucketId,
-      );
+      try {
+        selectedBucket = _calculatedBuckets.firstWhere(
+          (b) => b.id == _selectedBucketId,
+        );
+      } catch (_) {}
     }
 
     return Column(
       children: [
-        // SUMMARY ROW
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
           child: Row(
@@ -714,40 +440,33 @@ class _FinancePageState extends State<FinancePage> {
             ],
           ),
         ),
-
-        // GLOBAL BUDGET BAR
         if (!_showChart)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: GestureDetector(
-              onTap: _showGlobalBudgetEditor,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Total Monthly Budget",
-                        style: TextStyle(fontSize: 12, color: subTextColor),
-                      ),
-                      Icon(Icons.edit, size: 12, color: subTextColor),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  BudgetProgressBar(
-                    spent: totalBudgetSpent,
-                    limit: totalBudgetLimit,
-                    color: primaryColor,
-                    isFixed: false,
-                    customIdeal: totalIdealSpent,
-                  ),
-                ],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Total Monthly Budget",
+                      style: TextStyle(fontSize: 12, color: subTextColor),
+                    ),
+                    Icon(Icons.edit, size: 12, color: subTextColor),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                BudgetProgressBar(
+                  spent: totalBudgetSpent,
+                  limit: totalBudgetLimit,
+                  color: primaryColor,
+                  isFixed: false,
+                  customIdeal: totalIdealSpent,
+                ),
+              ],
             ),
           ),
-
-        // MAIN CONTENT
         SizedBox(
           height: _showChart ? 320 : 210,
           child: AnimatedSwitcher(
@@ -773,81 +492,138 @@ class _FinancePageState extends State<FinancePage> {
                   ),
           ),
         ),
-
         const SizedBox(height: 10),
 
-        // HISTORY HEADER
+        // --- HISTORY HEADER (FIXED: CENTERED TITLE, BACK BUTTON) ---
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (selectedBucket != null)
-                    Row(
-                      children: [
-                        Icon(
-                          selectedBucket.icon,
-                          color: selectedBucket.color,
-                          size: 24,
+              SizedBox(
+                height: 40,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // LEFT: Selected Bucket
+                    if (selectedBucket != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              selectedBucket.icon,
+                              color: selectedBucket.color,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              selectedBucket.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: textColor,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          selectedBucket.name,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    Text(
-                      "History",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
                       ),
-                    ),
 
-                  if (_selectedBucketId != null)
-                    Row(
-                      children: [
-                        ActionChip(
-                          // LOGIC FIX: Check if limit exists
-                          label: Text(
-                            selectedBucket!.limit > 0
-                                ? "Edit Limit"
-                                : "Set Goal",
-                          ),
-                          avatar: Icon(
-                            selectedBucket.limit > 0 ? Icons.edit : Icons.flag,
-                            size: 14,
-                          ),
-                          onPressed: () => _editBucketLimit(_selectedBucketId!),
-                          backgroundColor: isDark
-                              ? Colors.grey.shade800
-                              : Colors.white,
-                          side: BorderSide.none,
+                    // CENTER: History Title
+                    if (selectedBucket == null)
+                      Text(
+                        "History",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
                         ),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: const Text("Close"),
-                          avatar: const Icon(Icons.close, size: 14),
-                          onPressed: () =>
-                              setState(() => _selectedBucketId = null),
-                          backgroundColor: isDark
-                              ? Colors.grey.shade800
-                              : Colors.white,
-                          side: BorderSide.none,
+                      ),
+
+                    // RIGHT: Actions
+                    if (selectedBucket != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Edit Limit (Sleek Pill)
+                            InkWell(
+                              onTap: () => _updateBucketLimit(
+                                selectedBucket!.id,
+                                selectedBucket.limit,
+                                selectedBucket.name,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.edit,
+                                      size: 12,
+                                      color: textColor.withOpacity(0.7),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "Limit",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: textColor.withOpacity(0.7),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // BACK BUTTON (RENAMED FROM CLEAR)
+                            InkWell(
+                              onTap: () =>
+                                  setState(() => _selectedBucketId = null),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_back,
+                                      size: 12,
+                                      color: Colors.redAccent,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Back",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.redAccent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                ],
+                      ),
+                  ],
+                ),
               ),
 
               if (selectedBucket != null) ...[
@@ -872,6 +648,7 @@ class _FinancePageState extends State<FinancePage> {
             transactions: displayedTransactions,
             buckets: _calculatedBuckets,
             isDark: isDark,
+            onEdit: _onEditTransaction,
           ),
         ),
       ],
