@@ -6,7 +6,6 @@ class TransactionList extends StatelessWidget {
   final List<FinanceTransaction> transactions;
   final List<FinanceBucket> buckets;
   final bool isDark;
-  // Callback for the edit button
   final Function(FinanceTransaction) onEdit;
 
   const TransactionList({
@@ -37,8 +36,6 @@ class TransactionList extends StatelessWidget {
       itemCount: transactions.length,
       itemBuilder: (context, index) {
         final tx = transactions[index];
-
-        // Match bucket for color/icon logic
         FinanceBucket? bucket;
         if (tx.isExpense) {
           try {
@@ -70,7 +67,6 @@ class TransactionList extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Icon Box
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -80,8 +76,6 @@ class TransactionList extends StatelessWidget {
                 child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 16),
-
-              // Title & Date
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,23 +99,21 @@ class TransactionList extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Price & Edit Button
               Row(
                 children: [
+                  // FIX 3: RESTORED RED COLOR FOR EXPENSES
                   Text(
                     "${tx.isExpense ? '-' : '+'}\$${tx.amount.toStringAsFixed(2)}",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: tx.isExpense
-                          ? (isDark ? Colors.white70 : Colors.black87)
-                          : Colors.green,
+                          ? Colors
+                                .redAccent // Explicitly Red
+                          : Colors.green, // Explicitly Green
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // --- BLUE CIRCLE REQUEST: EDIT BUTTON ---
                   GestureDetector(
                     onTap: () => onEdit(tx),
                     child: Container(

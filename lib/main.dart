@@ -228,9 +228,9 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.fitness_center_rounded,
+                        icon: Icons.favorite_rounded,
                         index: 0,
-                        label: 'Gym',
+                        label: 'Health',
                         activeColor: activeColor,
                         currentIndex: currentIndex,
                       ),

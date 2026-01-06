@@ -5,10 +5,16 @@ class BookPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        '📚 Reading List will be listed here',
-        style: TextStyle(fontSize: 24),
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            '📚 Reading List will be listed here',
+            style: TextStyle(fontSize: 24),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }

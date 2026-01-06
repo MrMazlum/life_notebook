@@ -30,7 +30,10 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   bool _showSubscriptionDropdown = false;
   Map<String, dynamic>? _selectedSubscription;
 
-  // --- RESTORED QUICK OPTIONS ---
+  // Loading state (Visual only now, since we close instantly)
+  bool _isLoading = false;
+
+  // --- QUICK OPTIONS ---
   final List<Map<String, dynamic>> _quickAddExpenseOptions = [
     {'icon': '☕', 'title': 'Coffee', 'amount': '4.50', 'category': 'Dining'},
     {'icon': '🍔', 'title': 'Lunch', 'amount': '12.00', 'category': 'Dining'},
@@ -82,7 +85,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   @override
   void initState() {
     super.initState();
-    // PRE-FILL DATA IF EDITING
     if (widget.transactionToEdit != null) {
       final t = widget.transactionToEdit!;
       _titleController.text = t.title;
@@ -125,58 +127,106 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       }
       _isExpense = true;
       _showSubscriptionDropdown = false;
-
-      // Find matching bucket by name
       try {
         final match = widget.buckets.firstWhere(
           (b) => b.name == option['category'],
         );
         _selectedBucketId = match.id;
       } catch (e) {
-        // No match found, keep current
+        // No match found
       }
     });
   }
 
-  Future<void> _deleteTransaction() async {
-    final confirm = await showDialog<bool>(
+  // --- DELETE LOGIC (Fire and Forget) ---
+  void _deleteTransaction() {
+    // 1. Show Confirmation Dialog
+    showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Transaction"),
-        content: const Text("Are you sure you want to delete this?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.delete_forever_rounded,
+                size: 48,
+                color: Colors.redAccent,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Delete Transaction",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Are you sure? This cannot be undone.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54, fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.grey.shade700),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text("Cancel"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text("Delete"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
+        ),
       ),
-    );
-
-    if (confirm == true && widget.transactionToEdit != null) {
-      try {
-        await FirebaseFirestore.instance
+    ).then((confirm) {
+      // 2. If confirmed, delete without waiting
+      if (confirm == true && widget.transactionToEdit != null) {
+        // FIRE AND FORGET: No 'await' here
+        FirebaseFirestore.instance
             .collection('finance_transactions')
             .doc(widget.transactionToEdit!.id)
             .delete();
-        if (mounted) Navigator.pop(context); // Close dialog
-      } catch (e) {
-        print("Error deleting: $e");
+
+        // Close the main dialog immediately
+        if (mounted) Navigator.pop(context);
       }
-    }
+    });
   }
 
-  Future<void> _submit() async {
+  // --- SAVE LOGIC (Fire and Forget) ---
+  void _submit() {
     if (_amountController.text.isEmpty) return;
     if (_isExpense && _selectedBucketId == null) return;
 
-    String finalTitle = _titleController.text;
+    // We don't need isLoading anymore because we close instantly
+    // setState(() => _isLoading = true);
 
-    // Auto-fill title
+    String finalTitle = _titleController.text;
     if (_isExpense &&
         _showSubscriptionDropdown &&
         _selectedSubscription != null) {
@@ -209,13 +259,15 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
         'finance_transactions',
       );
 
+      // FIRE AND FORGET: We do NOT use 'await' here.
       if (widget.transactionToEdit != null) {
-        await collection.doc(widget.transactionToEdit!.id).update(data);
+        collection.doc(widget.transactionToEdit!.id).update(data);
       } else {
-        await collection.add(data);
+        collection.add(data);
       }
 
-      if (mounted) Navigator.pop(context);
+      // Close immediately. Firebase will sync when it can.
+      Navigator.pop(context);
     } catch (e) {
       print("Error saving: $e");
     }
@@ -229,315 +281,391 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final isEditing = widget.transactionToEdit != null;
 
-    return AlertDialog(
+    return Dialog(
       backgroundColor: bgColor,
-      scrollable: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      contentPadding: const EdgeInsets.all(20),
-      title: Center(
-        child: Text(
-          isEditing
-              ? "Edit Transaction"
-              : (_isExpense ? "New Expense" : "New Income"),
-          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
-        ),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 1. Toggle Switch
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _isExpense = true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _isExpense
-                            ? Colors.redAccent.withOpacity(0.2)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: _isExpense
-                            ? Border.all(color: Colors.redAccent)
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          "💸 Expense",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _isExpense ? Colors.redAccent : Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isEditing
+                    ? "Edit Transaction"
+                    : (_isExpense ? "New Expense" : "New Income"),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                  fontSize: 18,
                 ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _isExpense = false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: !_isExpense
-                            ? Colors.green.withOpacity(0.2)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: !_isExpense
-                            ? Border.all(color: Colors.green)
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          "💰 Income",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: !_isExpense ? Colors.green : Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 20),
 
-          // 2. QUICK ADD CHIPS (RESTORED)
-          if (_isExpense) ...[
-            SizedBox(
-              height: 40,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              // 1. Toggle Switch
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Row(
-                  children: _quickAddExpenseOptions.map((opt) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ActionChip(
-                        backgroundColor: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade100,
-                        label: Text("${opt['icon']} ${opt['title']}"),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 0,
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _isExpense = true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _isExpense
+                                ? Colors.redAccent.withOpacity(0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: _isExpense
+                                ? Border.all(color: Colors.redAccent)
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              "💸 Expense",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: _isExpense
+                                    ? Colors.redAccent
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ),
                         ),
-                        onPressed: () => _applyQuickAdd(opt),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _isExpense = false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: !_isExpense
+                                ? Colors.green.withOpacity(0.2)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: !_isExpense
+                                ? Border.all(color: Colors.green)
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              "💰 Income",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: !_isExpense ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 2. QUICK ADD CHIPS
+              if (_isExpense) ...[
+                SizedBox(
+                  height: 40,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _quickAddExpenseOptions.map((opt) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ActionChip(
+                            backgroundColor: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade100,
+                            label: Text("${opt['icon']} ${opt['title']}"),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            onPressed: () => _applyQuickAdd(opt),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // 3. Amount Input
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  prefixText: '\$ ',
+                  hintText: '0.00',
+                  filled: true,
+                  fillColor: isDark ? Colors.black26 : Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Category Dropdown
+              if (_isExpense)
+                DropdownButtonFormField<String>(
+                  value: _selectedBucketId,
+                  dropdownColor: bgColor,
+                  items: widget.buckets.map<DropdownMenuItem<String>>((b) {
+                    return DropdownMenuItem(
+                      value: b.id,
+                      child: Row(
+                        children: [
+                          Icon(b.icon, size: 18, color: b.color),
+                          const SizedBox(width: 8),
+                          Text(b.name, style: TextStyle(color: textColor)),
+                        ],
                       ),
                     );
                   }).toList(),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 3. Amount Input
-          TextField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-            textAlign: TextAlign.center,
-            decoration: InputDecoration(
-              prefixText: '\$ ',
-              hintText: '0.00',
-              filled: true,
-              fillColor: isDark ? Colors.black26 : Colors.grey.shade100,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 4. Category / Source Dropdown
-          if (_isExpense)
-            DropdownButtonFormField<String>(
-              value: _selectedBucketId,
-              dropdownColor: bgColor,
-              items: widget.buckets.map<DropdownMenuItem<String>>((b) {
-                return DropdownMenuItem(
-                  value: b.id,
-                  child: Row(
-                    children: [
-                      Icon(b.icon, size: 18, color: b.color),
-                      const SizedBox(width: 8),
-                      Text(b.name, style: TextStyle(color: textColor)),
-                    ],
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedBucketId = val;
+                      if (val != null) {
+                        try {
+                          final bucket = widget.buckets.firstWhere(
+                            (b) => b.id == val,
+                          );
+                          _checkIfSubscription(bucket);
+                        } catch (_) {}
+                      }
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: "Category",
+                    labelStyle: TextStyle(color: Colors.grey.shade500),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade700),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.green),
+                    ),
                   ),
-                );
-              }).toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedBucketId = val;
-                  if (val != null) {
-                    try {
-                      final bucket = widget.buckets.firstWhere(
-                        (b) => b.id == val,
-                      );
-                      _checkIfSubscription(bucket);
-                    } catch (_) {}
-                  }
-                });
-              },
-              decoration: InputDecoration(
-                labelText: "Category",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            )
-          else
-            DropdownButtonFormField<Map<String, dynamic>>(
-              value: _selectedIncomeCategory,
-              dropdownColor: bgColor,
-              items: _incomeOptions.map((cat) {
-                return DropdownMenuItem(
-                  value: cat,
-                  child: Row(
-                    children: [
-                      Icon(cat['icon'], size: 16, color: cat['color']),
-                      const SizedBox(width: 10),
-                      Text(cat['name'], style: TextStyle(color: textColor)),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (val) => setState(() => _selectedIncomeCategory = val),
-              decoration: InputDecoration(
-                labelText: "Source",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          const SizedBox(height: 12),
-
-          // 5. Title / Subscription
-          if (_isExpense && _showSubscriptionDropdown)
-            DropdownButtonFormField<Map<String, dynamic>>(
-              value: _selectedSubscription,
-              dropdownColor: bgColor,
-              items: _subscriptionOptions
-                  .map(
-                    (s) => DropdownMenuItem(
-                      value: s,
+                )
+              else
+                DropdownButtonFormField<Map<String, dynamic>>(
+                  value: _selectedIncomeCategory,
+                  dropdownColor: bgColor,
+                  items: _incomeOptions.map((cat) {
+                    return DropdownMenuItem(
+                      value: cat,
                       child: Row(
                         children: [
-                          Icon(s['icon'], color: s['color'], size: 20),
+                          Icon(cat['icon'], size: 16, color: cat['color']),
                           const SizedBox(width: 10),
-                          Text(s['name'], style: TextStyle(color: textColor)),
+                          Text(cat['name'], style: TextStyle(color: textColor)),
                         ],
                       ),
+                    );
+                  }).toList(),
+                  onChanged: (val) =>
+                      setState(() => _selectedIncomeCategory = val),
+                  decoration: InputDecoration(
+                    labelText: "Source",
+                    labelStyle: TextStyle(color: Colors.grey.shade500),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade700),
                     ),
-                  )
-                  .toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedSubscription = val;
-                  if (val != null) _titleController.text = val['name'];
-                });
-              },
-              decoration: InputDecoration(
-                labelText: "Subscription Name",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            )
-          else
-            TextField(
-              controller: _titleController,
-              style: TextStyle(color: textColor),
-              decoration: InputDecoration(
-                labelText: "Title (Optional)",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                hintText: _isExpense
-                    ? "e.g. Burger King"
-                    : "e.g. Monthly Allowance",
-              ),
-            ),
-          const SizedBox(height: 12),
-
-          // 6. Date Picker
-          InkWell(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: _selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2030),
-              );
-              if (picked != null) setState(() => _selectedDate = picked);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade600),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_today_rounded,
-                    size: 18,
-                    color: Colors.grey,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.green),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(_selectedDate),
-                    style: TextStyle(color: textColor),
+                ),
+              const SizedBox(height: 12),
+
+              // 5. Title / Subscription
+              if (_isExpense && _showSubscriptionDropdown)
+                DropdownButtonFormField<Map<String, dynamic>>(
+                  value: _selectedSubscription,
+                  dropdownColor: bgColor,
+                  items: _subscriptionOptions
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s,
+                          child: Row(
+                            children: [
+                              Icon(s['icon'], color: s['color'], size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                s['name'],
+                                style: TextStyle(color: textColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedSubscription = val;
+                      if (val != null) _titleController.text = val['name'];
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: "Subscription Name",
+                    labelStyle: TextStyle(color: Colors.grey.shade500),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade700),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.green),
+                    ),
+                  ),
+                )
+              else
+                TextField(
+                  controller: _titleController,
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    labelText: "Title (Optional)",
+                    labelStyle: TextStyle(color: Colors.grey.shade500),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade700),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.green),
+                    ),
+                    hintText: _isExpense
+                        ? "e.g. Burger King"
+                        : "e.g. Monthly Allowance",
+                    hintStyle: TextStyle(color: Colors.grey.shade600),
+                  ),
+                ),
+              const SizedBox(height: 12),
+
+              // 6. Date Picker
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: ColorScheme.dark(
+                            primary: primaryColor,
+                            onPrimary: Colors.white,
+                            surface: const Color(0xFF1E1E1E),
+                            onSurface: Colors.white,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade700),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 18,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('MMM dd, yyyy').format(_selectedDate),
+                        style: TextStyle(color: textColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 7. Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.grey.shade700),
+                        foregroundColor: textColor,
+                      ),
+                      child: const Text("Cancel"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      // NO LOADING CHECK - WE SUBMIT AND CLOSE
+                      onPressed: _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                      ),
+                      child: const Text("Save"),
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
 
-          // 7. DELETE BUTTON (BLUE CIRCLE REQUEST)
-          if (isEditing) ...[
-            const SizedBox(height: 20),
-            TextButton.icon(
-              onPressed: _deleteTransaction,
-              icon: const Icon(Icons.delete, color: Colors.red),
-              label: const Text(
-                "Delete Transaction",
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: _submit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+              if (isEditing) ...[
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: _deleteTransaction,
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: Colors.redAccent,
+                  ),
+                  label: const Text(
+                    "Delete Transaction",
+                    style: TextStyle(color: Colors.redAccent),
+                  ),
+                ),
+              ],
+            ],
           ),
-          child: const Text("Save"),
         ),
-      ],
+      ),
     );
   }
 }

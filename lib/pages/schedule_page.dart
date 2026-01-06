@@ -83,174 +83,186 @@ class _SchedulePageState extends State<SchedulePage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Padding(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
-                    shape: BoxShape.circle,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.delete_forever,
+                      size: 32,
+                      color: Colors.redAccent,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.delete_forever,
-                    size: 32,
-                    color: Colors.redAccent,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Title
-                Text(
-                  lesson.isRecurring ? "Delete Recurring?" : "Delete Event?",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black,
+                  // Title
+                  Flexible(
+                    child: Text(
+                      lesson.isRecurring
+                          ? "Delete Recurring?"
+                          : "Delete Event?",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // Subtitle
-                Text(
-                  lesson.isRecurring
-                      ? "Delete only this session or the entire series?"
-                      : "Are you sure you want to delete '${lesson.name}'?",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
+                  // Subtitle
+                  Text(
+                    lesson.isRecurring
+                        ? "Delete only this session or the entire series?"
+                        : "Are you sure you want to delete '${lesson.name}'?",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // Buttons
-                if (lesson.isRecurring) ...[
-                  // RECURRING BUTTONS
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: BorderSide(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
+                  // Buttons
+                  if (lesson.isRecurring) ...[
+                    // RECURRING BUTTONS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.white24
+                                    : Colors.grey.shade300,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx); // Close dialog
-                            _lessonsRef.doc(lesson.id).update({
-                              'excludeDates': FieldValue.arrayUnion([
-                                dateString,
-                              ]),
-                            });
-                          },
-                          child: Text(
-                            "Only This",
-                            style: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            backgroundColor: Colors.redAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            // This deletes the doc, so it wipes past & future.
-                            // Renaming button to "Delete Series" for clarity.
-                            _lessonsRef.doc(lesson.id).delete();
-                          },
-                          child: const Text(
-                            "Delete Series",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                            onPressed: () {
+                              Navigator.pop(ctx); // Close dialog
+                              _lessonsRef.doc(lesson.id).update({
+                                'excludeDates': FieldValue.arrayUnion([
+                                  dateString,
+                                ]),
+                              });
+                            },
+                            child: Text(
+                              "Only This",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : Colors.black87,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  // ONE-TIME EVENT BUTTONS
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: BorderSide(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: Colors.redAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () => Navigator.pop(ctx), // Just cancel
-                          child: Text(
-                            "Keep",
-                            style: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            backgroundColor: Colors.redAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _lessonsRef.doc(lesson.id).delete();
-                          },
-                          child: const Text(
-                            "Delete",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              // This deletes the doc, so it wipes past & future.
+                              // Renaming button to "Delete Series" for clarity.
+                              _lessonsRef.doc(lesson.id).delete();
+                            },
+                            child: const Text(
+                              "Delete Series",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ] else ...[
+                    // ONE-TIME EVENT BUTTONS
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.white24
+                                    : Colors.grey.shade300,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(ctx), // Just cancel
+                            child: Text(
+                              "Keep",
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: Colors.redAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _lessonsRef.doc(lesson.id).delete();
+                            },
+                            child: const Text(
+                              "Delete",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 12),
+
+                  // MAIN CANCEL BUTTON (Bottom)
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(color: Colors.grey.shade500),
+                    ),
                   ),
                 ],
-
-                const SizedBox(height: 12),
-
-                // MAIN CANCEL BUTTON (Bottom)
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(
-                    "Cancel",
-                    style: TextStyle(color: Colors.grey.shade500),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
