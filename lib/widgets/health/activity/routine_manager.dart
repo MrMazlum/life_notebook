@@ -72,8 +72,9 @@ class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
                       size: 28,
                     ),
                     onPressed: () {
-                      if (_tempSelected != null)
+                      if (_tempSelected != null) {
                         widget.onSelected(_tempSelected!);
+                      }
                     },
                   ),
                 ],

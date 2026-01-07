@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 
 // PAGE IMPORTS
-import 'pages/health_page.dart'; // CHANGE 1: Imported HealthPage instead of GymPage
+import 'pages/health_page.dart';
 import 'pages/book_page.dart';
 import 'pages/finance_page.dart';
 import 'pages/schedule_page.dart';
 import 'pages/dashboard_page.dart';
+import 'pages/login_page.dart';
 
 void main() async {
-  // 1. Ensure Flutter is ready
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
   runApp(const LifeNotebookApp());
 }
 
@@ -28,7 +26,7 @@ final ValueNotifier<int> _pageIndexNotifier = ValueNotifier(2);
 
 // Global Color List
 const List<Color> globalPageColors = [
-  Colors.deepOrange, // 0: Health (was Gym)
+  Colors.deepOrange, // 0: Health
   Colors.blue, // 1: Books
   Colors.teal, // 2: Home
   Colors.green, // 3: Finance
@@ -52,9 +50,12 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
   // --- Load Theme from Firestore ---
   Future<void> _loadUserTheme() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
       final doc = await FirebaseFirestore.instance
           .collection('users')
-          .doc('test_user') // Hardcoded user for now
+          .doc(user.uid)
           .get();
 
       if (doc.exists &&
@@ -73,55 +74,73 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _themeNotifier,
       builder: (context, ThemeMode currentMode, child) {
-        return ValueListenableBuilder<int>(
-          valueListenable: _pageIndexNotifier,
-          builder: (context, int pageIndex, _) {
-            final Color activeColor = globalPageColors[pageIndex];
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Life Notebook',
 
-            return MaterialApp(
-              debugShowCheckedModeBanner: false,
-              title: 'Life Notebook',
-
-              // 1. LIGHT THEME
-              theme: ThemeData(
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: activeColor,
-                  primary: activeColor,
-                  brightness: Brightness.light,
-                ),
-                useMaterial3: true,
-                scaffoldBackgroundColor: const Color(0xFFF5F5F5),
-                appBarTheme: AppBarTheme(
-                  backgroundColor: activeColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                ),
+          // 1. LIGHT THEME
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.teal,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+            appBarTheme: const AppBarTheme(
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            // Default popup menu style for light mode
+            popupMenuTheme: PopupMenuThemeData(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
+              elevation: 10,
+            ),
+          ),
 
-              // 2. DARK THEME
-              darkTheme: ThemeData(
-                colorScheme: ColorScheme.fromSeed(
-                  seedColor: activeColor,
-                  brightness: Brightness.dark,
-                  primary: activeColor,
-                  secondary: activeColor,
-                  surface: const Color(0xFF1E1E1E),
-                ),
-                useMaterial3: true,
-                scaffoldBackgroundColor: const Color(0xFF121212),
-
-                appBarTheme: const AppBarTheme(
-                  backgroundColor: Color(0xFF1E1E1E),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                ),
-                iconTheme: IconThemeData(color: activeColor),
+          // 2. DARK THEME
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.teal,
+              brightness: Brightness.dark,
+              surface: const Color(0xFF1E1E1E),
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFF121212),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF1E1E1E),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            // Default popup menu style for dark mode
+            popupMenuTheme: PopupMenuThemeData(
+              color: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
+              elevation: 10,
+            ),
+          ),
 
-              themeMode: currentMode,
-              home: const HomePage(),
-            );
-          },
+          themeMode: currentMode,
+
+          // --- AUTH GATE ---
+          home: StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasData) {
+                return const HomePage();
+              }
+              return const LoginPage();
+            },
+          ),
         );
       },
     );
@@ -136,7 +155,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final PageController _pageController = PageController(initialPage: 2);
+  // We declare the controller here but initialize it in initState
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with the current global index so it doesn't reset to dashboard (2)
+    _pageController = PageController(initialPage: _pageIndexNotifier.value);
+  }
 
   @override
   void dispose() {
@@ -162,19 +189,26 @@ class _HomePageState extends State<HomePage> {
     final newMode = isCurrentlyDark ? ThemeMode.light : ThemeMode.dark;
     _themeNotifier.value = newMode;
 
-    // Save preference to cloud
-    FirebaseFirestore.instance.collection('users').doc('test_user').set({
-      'isDarkMode': !isCurrentlyDark,
-    }, SetOptions(merge: true));
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'isDarkMode': !isCurrentlyDark,
+      }, SetOptions(merge: true));
+    }
+  }
+
+  // --- Sign Out Function ---
+  void _signOut() async {
+    await FirebaseAuth.instance.signOut();
   }
 
   // Your actual pages
   static const List<Widget> _pages = <Widget>[
-    HealthPage(), // CHANGE 2: Used HealthPage instead of GymPage
-    BookPage(), // 1
-    DashboardPage(), // 2
-    FinancePage(), // 3
-    SchedulePage(), // 4
+    HealthPage(),
+    BookPage(),
+    DashboardPage(),
+    FinancePage(),
+    SchedulePage(),
   ];
 
   @override
@@ -191,6 +225,7 @@ class _HomePageState extends State<HomePage> {
 
             return Scaffold(
               appBar: AppBar(
+                backgroundColor: isDark ? const Color(0xFF1E1E1E) : activeColor,
                 title: Text(
                   'Life Notebook',
                   style: TextStyle(
@@ -199,17 +234,110 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 centerTitle: true,
-
                 iconTheme: IconThemeData(
                   color: isDark ? activeColor : Colors.white,
                 ),
-                actions: [
-                  IconButton(
-                    icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                    color: isDark ? activeColor : Colors.white,
-                    onPressed: () => _toggleTheme(isDark),
+
+                // === NEW STYLED SETTINGS MENU ===
+                leading: Theme(
+                  // Override specific theme data just for this popup to ensure it matches the cards
+                  data: Theme.of(context).copyWith(
+                    popupMenuTheme: PopupMenuThemeData(
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: isDark
+                            ? BorderSide(color: Colors.grey.withOpacity(0.1))
+                            : BorderSide.none,
+                      ),
+                      elevation: 10,
+                    ),
                   ),
-                ],
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.settings_rounded),
+                    tooltip: 'Settings',
+                    offset: const Offset(
+                      10,
+                      50,
+                    ), // Shifts menu slightly for better placement
+                    onSelected: (String value) {
+                      if (value == 'theme') {
+                        _toggleTheme(isDark);
+                      } else if (value == 'logout') {
+                        _signOut();
+                      }
+                    },
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<String>>[
+                          // 1. Theme Toggle
+                          PopupMenuItem<String>(
+                            value: 'theme',
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[200],
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    isDark
+                                        ? Icons.light_mode_rounded
+                                        : Icons.dark_mode_rounded,
+                                    color: isDark
+                                        ? Colors.yellow
+                                        : Colors.grey[800],
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  isDark ? 'Light Mode' : 'Dark Mode',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const PopupMenuDivider(),
+
+                          // 2. Log Out
+                          PopupMenuItem<String>(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.logout_rounded,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Text(
+                                  'Log Out',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                  ),
+                ),
+
+                actions: [], // Cleared old actions
               ),
 
               body: PageView(
@@ -227,8 +355,7 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons
-                            .favorite_rounded, // You already had this correct!
+                        icon: Icons.favorite_rounded,
                         index: 0,
                         label: 'Health',
                         activeColor: activeColor,

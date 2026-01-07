@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // IMPORT ADDED
 import '../models/lesson.dart';
 import '../widgets/schedule/class_card.dart';
 import '../widgets/schedule/add_lesson_dialog.dart';
@@ -24,9 +25,16 @@ class _SchedulePageState extends State<SchedulePage> {
   @override
   void initState() {
     super.initState();
-    _lessonsStream = _lessonsRef
-        .where('userId', isEqualTo: 'test_user')
-        .snapshots();
+    // --- NEW: GET CURRENT USER ---
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _lessonsStream = _lessonsRef
+          .where('userId', isEqualTo: user.uid) // <--- QUERY BY REAL ID
+          .snapshots();
+    } else {
+      // Fallback (shouldn't happen if main() awaited login)
+      _lessonsStream = const Stream.empty();
+    }
   }
 
   void _saveLessonToFirestore(Lesson lesson) {
@@ -41,10 +49,14 @@ class _SchedulePageState extends State<SchedulePage> {
     String courseName,
     String newInstructor,
   ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     final querySnapshot = await _lessonsRef
-        .where('userId', isEqualTo: 'test_user')
+        .where('userId', isEqualTo: user.uid) // <--- QUERY BY REAL ID
         .where('name', isEqualTo: courseName)
         .get();
+
     final batch = FirebaseFirestore.instance.batch();
     for (var doc in querySnapshot.docs) {
       batch.update(doc.reference, {'instructor': newInstructor});
@@ -68,12 +80,10 @@ class _SchedulePageState extends State<SchedulePage> {
     });
   }
 
-  // UPDATED: Now shows a beautiful dialog for both recurring and one-time events
   void _confirmDeleteLogic(Lesson lesson) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final dateString = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-    // Common styling for the delete dialog to match "Professor Changed"
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -90,7 +100,6 @@ class _SchedulePageState extends State<SchedulePage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Icon
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -104,8 +113,6 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Title
                   Flexible(
                     child: Text(
                       lesson.isRecurring
@@ -120,8 +127,6 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Subtitle
                   Text(
                     lesson.isRecurring
                         ? "Delete only this session or the entire series?"
@@ -132,10 +137,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // Buttons
                   if (lesson.isRecurring) ...[
-                    // RECURRING BUTTONS
                     Row(
                       children: [
                         Expanded(
@@ -152,7 +154,7 @@ class _SchedulePageState extends State<SchedulePage> {
                               ),
                             ),
                             onPressed: () {
-                              Navigator.pop(ctx); // Close dialog
+                              Navigator.pop(ctx);
                               _lessonsRef.doc(lesson.id).update({
                                 'excludeDates': FieldValue.arrayUnion([
                                   dateString,
@@ -181,8 +183,6 @@ class _SchedulePageState extends State<SchedulePage> {
                             ),
                             onPressed: () {
                               Navigator.pop(ctx);
-                              // This deletes the doc, so it wipes past & future.
-                              // Renaming button to "Delete Series" for clarity.
                               _lessonsRef.doc(lesson.id).delete();
                             },
                             child: const Text(
@@ -199,7 +199,6 @@ class _SchedulePageState extends State<SchedulePage> {
                       ],
                     ),
                   ] else ...[
-                    // ONE-TIME EVENT BUTTONS
                     Row(
                       children: [
                         Expanded(
@@ -215,7 +214,7 @@ class _SchedulePageState extends State<SchedulePage> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onPressed: () => Navigator.pop(ctx), // Just cancel
+                            onPressed: () => Navigator.pop(ctx),
                             child: Text(
                               "Keep",
                               style: TextStyle(
@@ -250,10 +249,7 @@ class _SchedulePageState extends State<SchedulePage> {
                       ],
                     ),
                   ],
-
                   const SizedBox(height: 12),
-
-                  // MAIN CANCEL BUTTON (Bottom)
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: Text(
@@ -296,7 +292,7 @@ class _SchedulePageState extends State<SchedulePage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _openLessonDialog(), // ADD MODE
+        onPressed: () => _openLessonDialog(),
         backgroundColor: accentColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -316,6 +312,7 @@ class _SchedulePageState extends State<SchedulePage> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                // If no user is logged in yet, snapshot may be empty
                 final allLessons =
                     snapshot.data?.docs
                         .map((doc) => Lesson.fromFirestore(doc))
@@ -360,8 +357,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     final lesson = daysLessons[index];
                     return ClassCard(
                       lesson: lesson,
-                      onEdit: () =>
-                          _openLessonDialog(lesson: lesson), // EDIT MODE
+                      onEdit: () => _openLessonDialog(lesson: lesson),
                     );
                   },
                 );

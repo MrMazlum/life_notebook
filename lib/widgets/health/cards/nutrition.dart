@@ -101,7 +101,7 @@ class NutritionCard extends StatelessWidget {
                     child: Switch(
                       value: log.useMacros,
                       onChanged: onDietToggle,
-                      activeColor: Colors.green,
+                      activeThumbColor: Colors.green,
                       activeTrackColor: Colors.green.withOpacity(0.2),
                       inactiveThumbColor: Colors.grey,
                       inactiveTrackColor: isDark
@@ -238,7 +238,7 @@ class _FoodLogSheetState extends State<FoodLogSheet> {
                       Switch(
                         value: _showDetails,
                         onChanged: (val) => setState(() => _showDetails = val),
-                        activeColor: Colors.green,
+                        activeThumbColor: Colors.green,
                       ),
                     ],
                   ),
@@ -429,7 +429,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
                       Switch(
                         value: _isDetailed,
                         onChanged: (val) => setState(() => _isDetailed = val),
-                        activeColor: Colors.green,
+                        activeThumbColor: Colors.green,
                       ),
                     ],
                   ),

@@ -29,26 +29,25 @@ class _EditMonthlyBudgetDialogState extends State<EditMonthlyBudgetDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       insetPadding: const EdgeInsets.all(20),
       child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
         padding: const EdgeInsets.all(20.0),
-        // FIX 1: Wrap in SingleChildScrollView to prevent keyboard overflow
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Monthly Budgets",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Monthly Budgets",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-              const SizedBox(height: 16),
-              // Use a limited height list or shrinkWrap
-              ListView.separated(
-                shrinkWrap: true, // Important for dialogs
-                physics:
-                    const NeverScrollableScrollPhysics(), // Scroll the parent, not this list
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.separated(
+                shrinkWrap: true,
                 itemCount: widget.buckets.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
@@ -86,51 +85,51 @@ class _EditMonthlyBudgetDialogState extends State<EditMonthlyBudgetDialog> {
                         bucket.id,
                         bucket.limit,
                         bucket.name,
-                        () => setState(() {}), // Refresh this dialog after save
+                        () => setState(() {}),
                       );
                     },
                   );
                 },
               ),
-              const Divider(),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Total Budget",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    Text(
-                      "\$${totalLimit.toStringAsFixed(0)}",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+            ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Total Budget",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  Text(
+                    "\$${totalLimit.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
                     ),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    "Done",
-                    style: TextStyle(color: Colors.white),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  "Done",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -5,9 +5,9 @@ class FinanceBucket {
   final String id;
   final String name;
   final double limit;
-  final double spent; // We calculate this locally, we don't store it
-  final int iconCode; // Store icon as int
-  final int colorValue; // Store color as int
+  final double spent; // Calculated locally based on transactions
+  final int iconCode;
+  final int colorValue;
   final bool isFixed;
 
   FinanceBucket({
@@ -20,12 +20,9 @@ class FinanceBucket {
     this.isFixed = false,
   });
 
-  // Helper to get actual IconData object
   IconData get icon => IconData(iconCode, fontFamily: 'MaterialIcons');
-  // Helper to get actual Color object
   Color get color => Color(colorValue);
 
-  // Convert to Firestore Map
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -33,19 +30,18 @@ class FinanceBucket {
       'iconCode': iconCode,
       'colorValue': colorValue,
       'isFixed': isFixed,
-      'userId': 'test_user',
+      'userId': 'test_user', // Hardcoded for now
     };
   }
 
-  // Create from Firestore Document
   factory FinanceBucket.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return FinanceBucket(
       id: doc.id,
-      name: data['name'] ?? '',
+      name: data['name'] ?? 'Unknown',
       limit: (data['limit'] ?? 0.0).toDouble(),
-      iconCode: data['iconCode'] ?? 57522, // Default icon code
-      colorValue: data['colorValue'] ?? 4280391411, // Default color value
+      iconCode: data['iconCode'] ?? 57522, // Default icon
+      colorValue: data['colorValue'] ?? 4280391411, // Default color (blueish)
       isFixed: data['isFixed'] ?? false,
     );
   }
@@ -68,10 +64,10 @@ class FinanceTransaction {
   final String title;
   final double amount;
   final DateTime date;
-  final String categoryId; // Points to a Bucket ID or 'income'
+  final String categoryId;
   final bool isExpense;
-  final int? iconCode; // For income/custom sources
-  final int? colorValue; // For income/custom sources
+  final int? iconCode;
+  final int? colorValue;
 
   FinanceTransaction({
     required this.id,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // IMPORT ADDED
 import '../../models/lesson.dart';
 
 class AddLessonDialog extends StatefulWidget {
@@ -131,7 +132,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     }
   }
 
-  // UPDATED: Added Cancel Button logic
+  // Cancel Button logic included
   Future<bool?> _showProfessionalConfirmDialog(
     BuildContext context,
     String course,
@@ -304,7 +305,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // ADDED: Cancel Button
                 TextButton(
                   onPressed: () =>
                       Navigator.pop(ctx, null), // null means cancel
@@ -327,6 +327,13 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Missing Name or Time')));
+      return;
+    }
+
+    // --- NEW: GET CURRENT USER ---
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print("No user logged in!");
       return;
     }
 
@@ -372,7 +379,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
 
     final newLesson = Lesson(
       id: widget.lessonToEdit?.id,
-      userId: 'test_user',
+      userId: user.uid, // <--- CHANGED FROM 'test_user' to REAL ID
       name: finalCourseName,
       room: _isLecture ? _roomController.text : '',
       instructor: _isLecture ? finalInstructor : '',
@@ -603,7 +610,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    value: _selectedDuration,
+                    initialValue: _selectedDuration,
                     items: _durations
                         .map(
                           (m) =>
@@ -628,7 +635,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     color: isDark ? Colors.white70 : Colors.grey,
                     width: 2,
                   ),
-                  checkColor: MaterialStateProperty.all(Colors.white),
+                  checkColor: WidgetStateProperty.all(Colors.white),
                 ),
               ),
               child: CheckboxListTile(

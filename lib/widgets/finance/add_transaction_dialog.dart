@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // <--- IMPORT ADDED
 import '../../models/finance_models.dart';
 
 class AddTransactionDialog extends StatefulWidget {
@@ -29,9 +30,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
   // Logic for Subscriptions
   bool _showSubscriptionDropdown = false;
   Map<String, dynamic>? _selectedSubscription;
-
-  // Loading state (Visual only now, since we close instantly)
-  bool _isLoading = false;
 
   // --- QUICK OPTIONS ---
   final List<Map<String, dynamic>> _quickAddExpenseOptions = [
@@ -99,7 +97,14 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           _checkIfSubscription(bucket);
         } catch (_) {}
       } else {
-        _selectedIncomeCategory = _incomeOptions.first;
+        try {
+          final match = _incomeOptions.firstWhere(
+            (opt) => opt['name'] == t.title,
+          );
+          _selectedIncomeCategory = match;
+        } catch (_) {
+          _selectedIncomeCategory = _incomeOptions.first;
+        }
       }
     } else {
       if (widget.buckets.isNotEmpty) {
@@ -132,15 +137,12 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
           (b) => b.name == option['category'],
         );
         _selectedBucketId = match.id;
-      } catch (e) {
-        // No match found
-      }
+      } catch (e) {}
     });
   }
 
-  // --- DELETE LOGIC (Fire and Forget) ---
+  // --- DELETE LOGIC ---
   void _deleteTransaction() {
-    // 1. Show Confirmation Dialog
     showDialog<bool>(
       context: context,
       builder: (ctx) => Dialog(
@@ -204,27 +206,27 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
         ),
       ),
     ).then((confirm) {
-      // 2. If confirmed, delete without waiting
       if (confirm == true && widget.transactionToEdit != null) {
-        // FIRE AND FORGET: No 'await' here
         FirebaseFirestore.instance
             .collection('finance_transactions')
             .doc(widget.transactionToEdit!.id)
             .delete();
-
-        // Close the main dialog immediately
         if (mounted) Navigator.pop(context);
       }
     });
   }
 
-  // --- SAVE LOGIC (Fire and Forget) ---
+  // --- SAVE LOGIC ---
   void _submit() {
     if (_amountController.text.isEmpty) return;
     if (_isExpense && _selectedBucketId == null) return;
 
-    // We don't need isLoading anymore because we close instantly
-    // setState(() => _isLoading = true);
+    // --- GET CURRENT USER ---
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print("No user logged in!");
+      return;
+    }
 
     String finalTitle = _titleController.text;
     if (_isExpense &&
@@ -245,7 +247,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       'isExpense': _isExpense,
       'categoryId': _isExpense ? _selectedBucketId : 'income',
       'date': Timestamp.fromDate(_selectedDate),
-      'userId': 'test_user',
+      'userId': user.uid, // <--- CHANGED FROM 'test_user' TO REAL ID
     };
 
     if (!_isExpense && _selectedIncomeCategory != null) {
@@ -258,15 +260,11 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       final collection = FirebaseFirestore.instance.collection(
         'finance_transactions',
       );
-
-      // FIRE AND FORGET: We do NOT use 'await' here.
       if (widget.transactionToEdit != null) {
         collection.doc(widget.transactionToEdit!.id).update(data);
       } else {
         collection.add(data);
       }
-
-      // Close immediately. Firebase will sync when it can.
       Navigator.pop(context);
     } catch (e) {
       print("Error saving: $e");
@@ -303,7 +301,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
               ),
               const SizedBox(height: 20),
-
               // 1. Toggle Switch
               Container(
                 decoration: BoxDecoration(
@@ -370,7 +367,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-
               // 2. QUICK ADD CHIPS
               if (_isExpense) ...[
                 SizedBox(
@@ -396,8 +392,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-
-              // 3. Amount Input
+              // 3. Amount
               TextField(
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -421,11 +416,10 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // 4. Category Dropdown
+              // 4. Category
               if (_isExpense)
                 DropdownButtonFormField<String>(
-                  value: _selectedBucketId,
+                  initialValue: _selectedBucketId,
                   dropdownColor: bgColor,
                   items: widget.buckets.map<DropdownMenuItem<String>>((b) {
                     return DropdownMenuItem(
@@ -467,7 +461,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 )
               else
                 DropdownButtonFormField<Map<String, dynamic>>(
-                  value: _selectedIncomeCategory,
+                  initialValue: _selectedIncomeCategory,
                   dropdownColor: bgColor,
                   items: _incomeOptions.map((cat) {
                     return DropdownMenuItem(
@@ -497,11 +491,10 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                 ),
               const SizedBox(height: 12),
-
-              // 5. Title / Subscription
+              // 5. Title
               if (_isExpense && _showSubscriptionDropdown)
                 DropdownButtonFormField<Map<String, dynamic>>(
-                  value: _selectedSubscription,
+                  initialValue: _selectedSubscription,
                   dropdownColor: bgColor,
                   items: _subscriptionOptions
                       .map(
@@ -561,8 +554,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                 ),
               const SizedBox(height: 12),
-
-              // 6. Date Picker
+              // 6. Date
               InkWell(
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -570,19 +562,17 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                     initialDate: _selectedDate,
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: Theme.of(context).copyWith(
-                          colorScheme: ColorScheme.dark(
-                            primary: primaryColor,
-                            onPrimary: Colors.white,
-                            surface: const Color(0xFF1E1E1E),
-                            onSurface: Colors.white,
-                          ),
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: ColorScheme.dark(
+                          primary: primaryColor,
+                          onPrimary: Colors.white,
+                          surface: const Color(0xFF1E1E1E),
+                          onSurface: Colors.white,
                         ),
-                        child: child!,
-                      );
-                    },
+                      ),
+                      child: child!,
+                    ),
                   );
                   if (picked != null) setState(() => _selectedDate = picked);
                 },
@@ -611,9 +601,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               // 7. Buttons
               Row(
                 children: [
@@ -631,7 +619,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      // NO LOADING CHECK - WE SUBMIT AND CLOSE
                       onPressed: _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
@@ -646,7 +633,6 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                 ],
               ),
-
               if (isEditing) ...[
                 const SizedBox(height: 16),
                 TextButton.icon(

@@ -183,8 +183,9 @@ class HydrationCard extends StatelessWidget {
                 height: 55,
                 child: ElevatedButton(
                   onPressed: () {
-                    if (ctrl.text.isNotEmpty)
+                    if (ctrl.text.isNotEmpty) {
                       onEditMultiplier(int.parse(ctrl.text));
+                    }
                     Navigator.pop(ctx);
                   },
                   style: ElevatedButton.styleFrom(
