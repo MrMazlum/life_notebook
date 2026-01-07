@@ -1,4 +1,6 @@
-// Added for Timestamp handling
+import 'package:cloud_firestore/cloud_firestore.dart';
+// IMPORT THE EXERCISE MODELS
+import '../widgets/health/activity/exercise_models.dart';
 
 class FoodItem {
   final String name;
@@ -28,7 +30,6 @@ class FoodItem {
     };
   }
 
-  // NEW: Create from Map
   factory FoodItem.fromMap(Map<String, dynamic> map) {
     return FoodItem(
       name: map['name'] ?? '',
@@ -48,6 +49,8 @@ class HealthDailyLog {
   int steps;
   String? workoutName;
   bool isWorkoutDone;
+  // NEW: Store the actual exercises performed
+  List<ExerciseDetail> workoutLog;
   double weight;
 
   // Hydration
@@ -72,6 +75,7 @@ class HealthDailyLog {
     this.steps = 0,
     this.workoutName,
     this.isWorkoutDone = false,
+    List<ExerciseDetail>? workoutLog, // NEW
     this.weight = 0.0,
     this.waterGlasses = 0,
     this.waterGlassSizeMl = 250,
@@ -85,13 +89,15 @@ class HealthDailyLog {
     this.mood = 3,
     this.sleepHours = 7.0,
   }) : date = date ?? DateTime.now(),
-       foodLog = foodLog ?? [];
+       foodLog = foodLog ?? [],
+       workoutLog = workoutLog ?? []; // NEW
 
   HealthDailyLog copyWith({
     DateTime? date,
     int? steps,
     String? workoutName,
     bool? isWorkoutDone,
+    List<ExerciseDetail>? workoutLog, // NEW
     double? weight,
     int? waterGlasses,
     int? waterGlassSizeMl,
@@ -110,6 +116,7 @@ class HealthDailyLog {
       steps: steps ?? this.steps,
       workoutName: workoutName ?? this.workoutName,
       isWorkoutDone: isWorkoutDone ?? this.isWorkoutDone,
+      workoutLog: workoutLog ?? this.workoutLog, // NEW
       weight: weight ?? this.weight,
       waterGlasses: waterGlasses ?? this.waterGlasses,
       waterGlassSizeMl: waterGlassSizeMl ?? this.waterGlassSizeMl,
@@ -131,6 +138,7 @@ class HealthDailyLog {
       'steps': steps,
       'workoutName': workoutName,
       'isWorkoutDone': isWorkoutDone,
+      'workoutLog': workoutLog.map((e) => e.toMap()).toList(), // NEW
       'weight': weight,
       'waterGlasses': waterGlasses,
       'waterGlassSizeMl': waterGlassSizeMl,
@@ -146,7 +154,6 @@ class HealthDailyLog {
     };
   }
 
-  // NEW: Create from Firestore
   factory HealthDailyLog.fromMap(Map<String, dynamic> map, DateTime docDate) {
     var loadedFood = <FoodItem>[];
     if (map['foodLog'] != null) {
@@ -155,11 +162,20 @@ class HealthDailyLog {
           .toList();
     }
 
+    // NEW: Load Exercises
+    var loadedExercises = <ExerciseDetail>[];
+    if (map['workoutLog'] != null) {
+      loadedExercises = (map['workoutLog'] as List)
+          .map((e) => ExerciseDetail.fromMap(e))
+          .toList();
+    }
+
     return HealthDailyLog(
       date: docDate,
       steps: map['steps'] ?? 0,
       workoutName: map['workoutName'],
       isWorkoutDone: map['isWorkoutDone'] ?? false,
+      workoutLog: loadedExercises, // NEW
       weight: (map['weight'] ?? 0.0).toDouble(),
       waterGlasses: map['waterGlasses'] ?? 0,
       waterGlassSizeMl: map['waterGlassSizeMl'] ?? 250,

@@ -10,6 +10,10 @@ class ActivityCard extends StatefulWidget {
   final Function(bool) onWorkoutToggle;
   final Function(int) onStepsChanged;
   final Function(double) onWeightChanged;
+  final Function() onExerciseUpdated;
+
+  // NEW: Flag to change UI behavior for future dates
+  final bool isPlanningMode;
 
   const ActivityCard({
     super.key,
@@ -18,6 +22,8 @@ class ActivityCard extends StatefulWidget {
     required this.onWorkoutToggle,
     required this.onStepsChanged,
     required this.onWeightChanged,
+    required this.onExerciseUpdated,
+    this.isPlanningMode = false, // Default is false (Active mode)
   });
 
   @override
@@ -26,28 +32,18 @@ class ActivityCard extends StatefulWidget {
 
 class _ActivityCardState extends State<ActivityCard> {
   int _currentExerciseIndex = 0;
-
-  // MOCK DATA
-  final List<ExerciseDetail> _activeExercises = [
-    ExerciseDetail(
-      name: "Bench Press",
-      sets: [SetDetail(), SetDetail(), SetDetail()],
-    ),
-    ExerciseDetail(name: "Incline Fly", sets: [SetDetail(), SetDetail()]),
-    ExerciseDetail(
-      name: "Tricep Pushdown",
-      sets: [SetDetail(), SetDetail(), SetDetail(), SetDetail()],
-    ),
-  ];
-
   final Set<int> _completedIndices = {};
 
   @override
   Widget build(BuildContext context) {
     final hasRoutine = widget.log.workoutName != null;
 
+    if (widget.log.workoutLog.isNotEmpty &&
+        _currentExerciseIndex >= widget.log.workoutLog.length) {
+      _currentExerciseIndex = 0;
+    }
+
     return Container(
-      // REDUCED PADDING: Content pushes closer to edges
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -67,7 +63,9 @@ class _ActivityCardState extends State<ActivityCard> {
       ),
       child: !hasRoutine
           ? _buildSelectorState(context)
-          : _buildPlayerState(context),
+          : (widget.log.workoutLog.isEmpty
+                ? _buildLoadingOrEmptyState(context)
+                : _buildPlayerState(context)),
     );
   }
 
@@ -90,9 +88,9 @@ class _ActivityCardState extends State<ActivityCard> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            "No Routine",
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+          Text(
+            widget.isPlanningMode ? "Plan Workout" : "No Routine",
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
           const Text(
             "Tap to Start",
@@ -107,16 +105,40 @@ class _ActivityCardState extends State<ActivityCard> {
     );
   }
 
+  Widget _buildLoadingOrEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            "Setting up routine...",
+            style: TextStyle(color: Colors.white),
+          ),
+          TextButton(
+            onPressed: () => _showRoutineManager(context),
+            child: const Text(
+              "Change",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPlayerState(BuildContext context) {
-    final currentExercise = _activeExercises[_currentExerciseIndex];
+    final currentExercise = widget.log.workoutLog[_currentExerciseIndex];
     final isFirst = _currentExerciseIndex == 0;
-    final isLast = _currentExerciseIndex == _activeExercises.length - 1;
+    final isLast = _currentExerciseIndex == widget.log.workoutLog.length - 1;
     final isExerciseDone = _completedIndices.contains(_currentExerciseIndex);
     final doneColor = const Color(0xFF69F0AE);
 
     return Column(
       children: [
-        // 1. HEADER BUTTON (Top Edge)
+        // 1. HEADER
         GestureDetector(
           onTap: () => _showRoutineManager(context),
           child: Container(
@@ -152,10 +174,9 @@ class _ActivityCardState extends State<ActivityCard> {
           ),
         ),
 
-        // Pushes the content apart
         const Spacer(),
 
-        // 2. MIDDLE: ARROWS + TEXT (Centered vertically in available space)
+        // 2. EXERCISE DISPLAY
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -169,33 +190,29 @@ class _ActivityCardState extends State<ActivityCard> {
                 size: 20,
               ),
               padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
 
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isExerciseDone)
-                      Icon(Icons.check_circle, color: doneColor, size: 22),
-                    if (isExerciseDone) const SizedBox(height: 2),
-                    Text(
-                      currentExercise.name,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isExerciseDone ? doneColor : Colors.white,
-                        fontSize: 18, // Reduced font for better fit
-                        fontWeight: FontWeight.bold,
-                        height: 1.1,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isExerciseDone)
+                    Icon(Icons.check_circle, color: doneColor, size: 22),
+                  if (isExerciseDone) const SizedBox(height: 2),
+                  Text(
+                    currentExercise.name,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isExerciseDone ? doneColor : Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      height: 1.1,
                     ),
-                  ],
-                ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
 
@@ -209,7 +226,6 @@ class _ActivityCardState extends State<ActivityCard> {
                 size: 20,
               ),
               padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
           ],
@@ -217,11 +233,14 @@ class _ActivityCardState extends State<ActivityCard> {
 
         const Spacer(),
 
-        // 3. BOTTOM: LOG BUTTON (Bottom Edge)
+        // 3. BOTTOM BUTTON (Changes based on Mode)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4.0),
           child: GestureDetector(
-            onTap: () => _showLogger(context, currentExercise),
+            // If Planning: Open Routine Manager. If Active: Open Logger.
+            onTap: () => widget.isPlanningMode
+                ? _showRoutineManager(context)
+                : _showLogger(context, currentExercise),
             child: Container(
               height: 36,
               width: double.infinity,
@@ -232,14 +251,24 @@ class _ActivityCardState extends State<ActivityCard> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // Icon changes based on mode
                   Icon(
-                    isExerciseDone ? Icons.check_circle : Icons.edit,
+                    widget.isPlanningMode
+                        ? Icons
+                              .edit_note_rounded // Plan icon
+                        : (isExerciseDone
+                              ? Icons.check_circle
+                              : Icons.edit), // Log icon
                     color: Colors.deepOrange,
-                    size: 14,
+                    size: 16,
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    isExerciseDone ? "Logs" : "Log Sets",
+                    widget.isPlanningMode
+                        ? "Edit Routine" // Text for Future
+                        : (isExerciseDone
+                              ? "Logs"
+                              : "Log Sets"), // Text for Today
                     style: const TextStyle(
                       color: Colors.deepOrange,
                       fontWeight: FontWeight.bold,
@@ -265,12 +294,13 @@ class _ActivityCardState extends State<ActivityCard> {
         targetSetCount: exercise.sets.length,
         onComplete: (done) {
           if (done) {
+            widget.onExerciseUpdated();
             setState(() {
               _completedIndices.add(_currentExerciseIndex);
-              if (_currentExerciseIndex < _activeExercises.length - 1) {
+              if (_currentExerciseIndex < widget.log.workoutLog.length - 1) {
                 _currentExerciseIndex++;
               } else {
-                if (_completedIndices.length == _activeExercises.length) {
+                if (_completedIndices.length == widget.log.workoutLog.length) {
                   widget.onWorkoutToggle(true);
                 }
               }
@@ -298,8 +328,13 @@ class _ActivityCardState extends State<ActivityCard> {
         expand: false,
         builder: (_, scrollController) => RoutineManagerSheet(
           selectedRoutine: widget.log.workoutName,
-          onSelected: (val) {
-            widget.onRoutineChanged(val);
+          onSelected: (routineName) {
+            widget.onRoutineChanged(routineName);
+            final List<ExerciseDetail> newExercises =
+                _generateExercisesForRoutine(routineName);
+            widget.log.workoutLog = newExercises;
+            widget.onExerciseUpdated();
+
             setState(() {
               _currentExerciseIndex = 0;
               _completedIndices.clear();
@@ -309,5 +344,42 @@ class _ActivityCardState extends State<ActivityCard> {
         ),
       ),
     );
+  }
+
+  List<ExerciseDetail> _generateExercisesForRoutine(String routineName) {
+    if (routineName.contains("Push")) {
+      return [
+        ExerciseDetail(
+          name: "Bench Press",
+          sets: [SetDetail(), SetDetail(), SetDetail()],
+        ),
+        ExerciseDetail(name: "Incline Fly", sets: [SetDetail(), SetDetail()]),
+        ExerciseDetail(
+          name: "Tricep Pushdown",
+          sets: [SetDetail(), SetDetail(), SetDetail()],
+        ),
+      ];
+    } else if (routineName.contains("Pull")) {
+      return [
+        ExerciseDetail(name: "Pull Ups", sets: [SetDetail(), SetDetail()]),
+        ExerciseDetail(
+          name: "Barbell Row",
+          sets: [SetDetail(), SetDetail(), SetDetail()],
+        ),
+        ExerciseDetail(name: "Bicep Curl", sets: [SetDetail(), SetDetail()]),
+      ];
+    } else {
+      return [
+        ExerciseDetail(
+          name: "Squat",
+          sets: [SetDetail(), SetDetail(), SetDetail()],
+        ),
+        ExerciseDetail(name: "Leg Press", sets: [SetDetail(), SetDetail()]),
+        ExerciseDetail(
+          name: "Calf Raise",
+          sets: [SetDetail(), SetDetail(), SetDetail()],
+        ),
+      ];
+    }
   }
 }

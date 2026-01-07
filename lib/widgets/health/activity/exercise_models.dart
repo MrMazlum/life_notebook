@@ -5,6 +5,17 @@ class SetDetail {
   double weight;
 
   SetDetail({this.reps = 10, this.weight = 0.0});
+
+  // NEW: Convert to Map for Firestore
+  Map<String, dynamic> toMap() => {'reps': reps, 'weight': weight};
+
+  // NEW: Create from Map
+  factory SetDetail.fromMap(Map<String, dynamic> map) {
+    return SetDetail(
+      reps: map['reps'] ?? 0,
+      weight: (map['weight'] ?? 0).toDouble(),
+    );
+  }
 }
 
 class ExerciseDetail {
@@ -12,10 +23,28 @@ class ExerciseDetail {
   List<SetDetail> sets;
 
   ExerciseDetail({required this.name, List<SetDetail>? sets})
-    : sets = sets ?? [SetDetail(), SetDetail(), SetDetail()]; // Default 3 sets
+    : sets = sets ?? [SetDetail(), SetDetail(), SetDetail()];
+
+  // NEW: Convert to Map
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'sets': sets.map((s) => s.toMap()).toList(),
+  };
+
+  // NEW: Create from Map
+  factory ExerciseDetail.fromMap(Map<String, dynamic> map) {
+    return ExerciseDetail(
+      name: map['name'] ?? '',
+      sets:
+          (map['sets'] as List<dynamic>?)
+              ?.map((s) => SetDetail.fromMap(s))
+              .toList() ??
+          [],
+    );
+  }
 }
 
-// Master List of Exercises (In-Memory Database)
+// Master List (remains the same)
 final List<String> masterExerciseList = [
   "Bench Press",
   "Incline Dumbbell Press",

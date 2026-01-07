@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/health_model.dart';
-
-// IMPORTS
 import 'cards/nutrition.dart';
 import 'cards/hydration.dart';
 import 'activity/activity_card.dart';
+import 'cards/weight_dialog.dart';
 
 class HealthGrid extends StatelessWidget {
   final HealthDailyLog log;
@@ -18,9 +17,9 @@ class HealthGrid extends StatelessWidget {
   final Function(bool) onWorkoutToggle;
   final Function(FoodItem) onAddFood;
   final Function(int) onUpdateGlassSize;
-
   final Function(int) onCaloriesChanged;
   final Function(int, int, int) onMacrosChanged;
+  final VoidCallback onExerciseUpdated;
 
   const HealthGrid({
     super.key,
@@ -37,6 +36,7 @@ class HealthGrid extends StatelessWidget {
     required this.onUpdateGlassSize,
     required this.onCaloriesChanged,
     required this.onMacrosChanged,
+    required this.onExerciseUpdated,
   });
 
   @override
@@ -48,13 +48,11 @@ class HealthGrid extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // --- ROW 1: GYM & NUTRITION (THE NEW LAYOUT) ---
+          // GYM & NUTRITION
           IntrinsicHeight(
-            // Ensures both cards stretch to same height
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // GYM CARD (Half Width)
                 Expanded(
                   child: ActivityCard(
                     log: log,
@@ -62,10 +60,10 @@ class HealthGrid extends StatelessWidget {
                     onWorkoutToggle: onWorkoutToggle,
                     onStepsChanged: onStepsChanged,
                     onWeightChanged: onWeightChanged,
+                    onExerciseUpdated: onExerciseUpdated,
                   ),
                 ),
                 const SizedBox(width: 16),
-                // NUTRITION CARD (Half Width)
                 Expanded(
                   child: NutritionCard(
                     log: log,
@@ -76,10 +74,9 @@ class HealthGrid extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 16),
 
-          // --- ROW 2: STEPS & WEIGHT ---
+          // STEPS & WEIGHT
           Row(
             children: [
               Expanded(
@@ -91,28 +88,16 @@ class HealthGrid extends StatelessWidget {
                   "steps",
                   Colors.orange,
                   cardColor,
-                  () => onStepsChanged(log.steps), // Placeholder tap
+                  () => onStepsChanged(log.steps),
                 ),
               ),
               const SizedBox(width: 16),
-              Expanded(
-                child: _buildSimpleCard(
-                  context,
-                  Icons.monitor_weight,
-                  "Weight",
-                  "${log.weight}",
-                  "kg",
-                  Colors.deepPurple,
-                  cardColor,
-                  () => onWeightChanged(log.weight), // Placeholder tap
-                ),
-              ),
+              Expanded(child: _buildWeightCard(context)),
             ],
           ),
-
           const SizedBox(height: 16),
 
-          // --- ROW 3: HYDRATION ---
+          // HYDRATION
           Row(
             children: [
               Expanded(
@@ -142,8 +127,9 @@ class HealthGrid extends StatelessWidget {
                     icon: Icons.coffee,
                     color: Colors.brown,
                     value: log.caffeineAmount,
-                    multiplier: 95,
+                    multiplier: 95, // Avg mg per cup
                     unit: "mg",
+                    // FIX: Changed +50 to +1 (1 cup)
                     onAdd: () => onCaffeineChanged(log.caffeineAmount + 1),
                     onRemove: () => onCaffeineChanged(
                       log.caffeineAmount > 0 ? log.caffeineAmount - 1 : 0,
@@ -156,7 +142,7 @@ class HealthGrid extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // --- MOOD TRACKER ---
+          // MOOD
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
@@ -185,14 +171,80 @@ class HealthGrid extends StatelessWidget {
               }).toList(),
             ),
           ),
-
           const SizedBox(height: 80),
         ],
       ),
     );
   }
 
-  // Simple Card Builder for Steps/Weight (to keep code clean)
+  Widget _buildWeightCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    return Stack(
+      children: [
+        Container(
+          height: 120,
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Icon(
+                Icons.monitor_weight_rounded,
+                color: Colors.deepPurple,
+                size: 28,
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${log.weight}",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  const Text(
+                    "kg",
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton(
+            icon: Icon(
+              Icons.settings_outlined,
+              color: Colors.grey.shade600,
+              size: 20,
+            ),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => WeightPickerDialog(
+                  initialWeight: log.weight,
+                  onWeightChanged: onWeightChanged,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSimpleCard(
     BuildContext context,
     IconData icon,
@@ -205,7 +257,6 @@ class HealthGrid extends StatelessWidget {
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(24),
