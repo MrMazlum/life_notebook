@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // NEW
-import 'package:cloud_firestore/cloud_firestore.dart'; // NEW
-import 'firebase_options.dart'; // NEW
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
 
-// Ensure these point to your actual file structure
-import 'pages/gym_page.dart';
+// PAGE IMPORTS
+import 'pages/health_page.dart'; // CHANGE 1: Imported HealthPage instead of GymPage
 import 'pages/book_page.dart';
 import 'pages/finance_page.dart';
 import 'pages/schedule_page.dart';
@@ -28,7 +28,7 @@ final ValueNotifier<int> _pageIndexNotifier = ValueNotifier(2);
 
 // Global Color List
 const List<Color> globalPageColors = [
-  Colors.deepOrange, // 0: Gym
+  Colors.deepOrange, // 0: Health (was Gym)
   Colors.blue, // 1: Books
   Colors.teal, // 2: Home
   Colors.green, // 3: Finance
@@ -49,7 +49,7 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
     _loadUserTheme();
   }
 
-  // --- NEW: Load Theme from Firestore ---
+  // --- Load Theme from Firestore ---
   Future<void> _loadUserTheme() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -157,7 +157,7 @@ class _HomePageState extends State<HomePage> {
     _pageIndexNotifier.value = index;
   }
 
-  // --- NEW: Save Theme to Firestore ---
+  // --- Save Theme to Firestore ---
   void _toggleTheme(bool isCurrentlyDark) {
     final newMode = isCurrentlyDark ? ThemeMode.light : ThemeMode.dark;
     _themeNotifier.value = newMode;
@@ -170,7 +170,7 @@ class _HomePageState extends State<HomePage> {
 
   // Your actual pages
   static const List<Widget> _pages = <Widget>[
-    GymPage(), // 0
+    HealthPage(), // CHANGE 2: Used HealthPage instead of GymPage
     BookPage(), // 1
     DashboardPage(), // 2
     FinancePage(), // 3
@@ -207,8 +207,7 @@ class _HomePageState extends State<HomePage> {
                   IconButton(
                     icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
                     color: isDark ? activeColor : Colors.white,
-                    onPressed: () =>
-                        _toggleTheme(isDark), // <--- Use new toggle function
+                    onPressed: () => _toggleTheme(isDark),
                   ),
                 ],
               ),
@@ -228,7 +227,8 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.favorite_rounded,
+                        icon: Icons
+                            .favorite_rounded, // You already had this correct!
                         index: 0,
                         label: 'Health',
                         activeColor: activeColor,
