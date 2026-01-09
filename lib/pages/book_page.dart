@@ -7,8 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/book_models.dart';
 import '../widgets/book/book_hero.dart';
 import '../widgets/book/calendar_strip.dart';
-import '../widgets/book/book_search_delegate.dart';
-import '../widgets/book/book_summary_view.dart'; // NEW
+import '../widgets/book/book_summary_view.dart';
+import '../widgets/book/habits_section.dart';
+import '../widgets/book/notes_section.dart';
+import '../widgets/book/note_editor_sheet.dart';
+import '../widgets/book/all_habits_view.dart';
 
 class BookPage extends StatefulWidget {
   const BookPage({super.key});
@@ -18,10 +21,11 @@ class BookPage extends StatefulWidget {
 }
 
 class _BookPageState extends State<BookPage> {
-  DateTime _selectedDate = DateTime.now();
+  // Normalize date to midnight to avoid time mismatches
+  DateTime _selectedDate = DateUtils.dateOnly(DateTime.now());
   late PageController _weekPageController;
   final int _initialPage = 1000;
-  bool _forceInspectMode = false; // For viewing details of past days
+  bool _forceInspectMode = false;
 
   StreamSubscription<DocumentSnapshot>? _logSubscription;
   BookDailyLog _currentLog = BookDailyLog();
@@ -41,13 +45,15 @@ class _BookPageState extends State<BookPage> {
     super.dispose();
   }
 
-  // --- LOGIC ---
+  // --- 📅 DATE & SUBSCRIPTION LOGIC ---
+
   void _subscribeToDate(DateTime date) {
     _logSubscription?.cancel();
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final dateKey = DateFormat('yyyy-MM-dd').format(date);
+    final normalizedDate = DateUtils.dateOnly(date);
+    final dateKey = DateFormat('yyyy-MM-dd').format(normalizedDate);
 
     _logSubscription = FirebaseFirestore.instance
         .collection('users')
@@ -57,94 +63,176 @@ class _BookPageState extends State<BookPage> {
         .snapshots()
         .listen((snapshot) {
           if (snapshot.exists && snapshot.data() != null) {
-            if (mounted)
+            if (mounted) {
               setState(
-                () =>
-                    _currentLog = BookDailyLog.fromMap(snapshot.data()!, date),
+                () => _currentLog = BookDailyLog.fromMap(
+                  snapshot.data()!,
+                  normalizedDate,
+                ),
               );
-          } else {
-            if (DateUtils.isSameDay(date, DateTime.now())) {
-              _initializeDay(date); // Only auto-fill for today/future
-            } else {
-              if (mounted)
-                setState(
-                  () => _currentLog = BookDailyLog(date: date),
-                ); // Empty for past if not exists
             }
+          } else {
+            // If no log exists for this date, initialize it (copy habits)
+            _initializeDay(normalizedDate);
           }
         });
   }
 
+  // ✅ HABIT REPETITION: Looks for the LATEST log that is BEFORE today
   Future<void> _initializeDay(DateTime date) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Find the closest PAST log
     final prevLogs = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('book_logs')
+        .where('date', isLessThan: Timestamp.fromDate(date))
         .orderBy('date', descending: true)
         .limit(1)
         .get();
+
     List<MindTask> inheritedHabits = [];
     if (prevLogs.docs.isNotEmpty) {
       final prevLog = BookDailyLog.fromMap(
         prevLogs.docs.first.data(),
         DateTime.now(),
       );
+
       inheritedHabits = prevLog.tasks
           .where((t) => t.isHabit)
           .map(
             (t) => MindTask(
-              id: t.id,
+              id: t.id, // ✅ KEEP SAME ID TO MAINTAIN STREAK
               title: t.title,
               isHabit: true,
-              isDone: false,
+              isDone: false, // Reset done status for new day
+              streak: t.isDone
+                  ? t.streak
+                  : 0, // Carry over streak if done yesterday
             ),
           )
           .toList();
     }
+
     if (mounted) {
       setState(
         () => _currentLog = BookDailyLog(date: date, tasks: inheritedHabits),
       );
+      // Auto-save to create the document so future edits work immediately
       _saveToFirestore();
     }
   }
+
+  // --- 🔥 FIRESTORE ACTIONS ---
 
   void _saveToFirestore() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+    final data = _currentLog.toMap();
+    data['date'] = Timestamp.fromDate(_selectedDate); // Needed for sorting
+
     FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('book_logs')
         .doc(dateKey)
-        .set(_currentLog.toMap(), SetOptions(merge: true));
+        .set(data, SetOptions(merge: true));
   }
+
+  // --- TASKS & HABITS ---
 
   void _toggleTask(MindTask task) {
-    setState(() => task.isDone = !task.isDone);
+    setState(() {
+      task.isDone = !task.isDone;
+      // Local streak update for immediate feedback
+      if (task.isHabit) {
+        if (task.isDone)
+          task.streak += 1;
+        else
+          task.streak = (task.streak > 0) ? task.streak - 1 : 0;
+      }
+    });
     _saveToFirestore();
   }
 
-  void _addNewTask(String title, bool isHabit) {
-    setState(
-      () => _currentLog.tasks.add(
-        MindTask(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: title,
-          isHabit: isHabit,
-          isDone: false,
-        ),
-      ),
+  Future<void> _addNewTask(String title, bool isHabit) async {
+    // Prevent duplicates in current view
+    if (_currentLog.tasks.any((t) => t.title == title)) return;
+
+    final newTask = MindTask(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      isHabit: isHabit,
+      isDone: false,
+      streak: 0,
     );
+
+    setState(() => _currentLog.tasks.add(newTask));
     _saveToFirestore();
+
+    // If adding a habit, propagate to FUTURE days too
+    if (isHabit) {
+      await _propagateHabitChange(newTask, isDelete: false);
+    }
   }
 
-  void _deleteTask(MindTask task) {
+  Future<void> _deleteTask(MindTask task) async {
     setState(() => _currentLog.tasks.removeWhere((t) => t.id == task.id));
     _saveToFirestore();
+
+    // If deleting a habit, remove from FUTURE days too
+    if (task.isHabit) {
+      await _propagateHabitChange(task, isDelete: true);
+    }
+  }
+
+  // ✅ Updates FUTURE logs so habits persist or disappear correctly
+  Future<void> _propagateHabitChange(
+    MindTask task, {
+    required bool isDelete,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final futureLogs = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('book_logs')
+        .where('date', isGreaterThan: Timestamp.fromDate(_selectedDate))
+        .get();
+
+    if (futureLogs.docs.isEmpty) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (var doc in futureLogs.docs) {
+      BookDailyLog log = BookDailyLog.fromMap(doc.data(), DateTime.now());
+
+      if (isDelete) {
+        log.tasks.removeWhere((t) => t.id == task.id);
+      } else {
+        // Only add if not already present (ID Check)
+        if (!log.tasks.any((t) => t.id == task.id)) {
+          log.tasks.add(
+            MindTask(
+              id: task.id,
+              title: task.title,
+              isHabit: true,
+              isDone: false,
+              streak: 0,
+            ),
+          );
+        }
+      }
+      batch.update(doc.reference, {
+        'tasks': log.tasks.map((t) => t.toMap()).toList(),
+      });
+    }
+    await batch.commit();
   }
 
   void _updateTaskTitle(MindTask task, String newTitle) {
@@ -155,61 +243,20 @@ class _BookPageState extends State<BookPage> {
     }
   }
 
-  void _addNote(String title, String body) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final newNote = MindNote(
-      id: '',
-      title: title,
-      body: body,
-      tag: "General",
-      createdAt: DateTime.now(),
-    );
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('mind_notes')
-        .add(newNote.toMap());
-  }
+  // --- BOOK PROGRESS ---
 
-  void _updateNote(MindNote note, String t, String b) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('mind_notes')
-        .doc(note.id)
-        .update({'title': t, 'body': b});
-  }
-
-  void _deleteNote(String id) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('mind_notes')
-        .doc(id)
-        .delete();
-  }
-
-  void _updateBookProgress(
-    String bookId,
-    int pagesReadToday,
-    int absolutePage,
-  ) {
+  void _updateBookProgress(String bookId, int delta, int absolutePage) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Update Log (Historical)
     setState(() {
-      _currentLog.pagesRead += pagesReadToday;
+      int newPagesRead = _currentLog.pagesRead + delta;
+      if (newPagesRead < 0) newPagesRead = 0; // Prevent negative
+      _currentLog.pagesRead = newPagesRead;
       _currentLog.endPage = absolutePage;
     });
     _saveToFirestore();
 
-    // Update Book (Global)
     FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -221,93 +268,12 @@ class _BookPageState extends State<BookPage> {
         });
   }
 
-  // --- UI ACTIONS ---
-  void _showNoteSheet({MindNote? existingNote}) {
-    final tCtrl = TextEditingController(text: existingNote?.title);
-    final bCtrl = TextEditingController(text: existingNote?.body);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  // --- UI DIALOGS ---
 
-    // Increased height and bottom padding for visibility
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
-        ), // +40 for extra space
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: tCtrl,
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-              decoration: const InputDecoration(
-                hintText: "Title",
-                border: InputBorder.none,
-              ),
-            ),
-            const Divider(),
-            TextField(
-              controller: bCtrl,
-              maxLines: 5,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
-              decoration: const InputDecoration(
-                hintText: "Start typing...",
-                border: InputBorder.none,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (existingNote != null)
-                  IconButton(
-                    onPressed: () {
-                      _deleteNote(existingNote.id);
-                      Navigator.pop(ctx);
-                    },
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (tCtrl.text.isNotEmpty) {
-                      if (existingNote != null)
-                        _updateNote(existingNote, tCtrl.text, bCtrl.text);
-                      else
-                        _addNote(tCtrl.text, bCtrl.text);
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text("Save"),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ... (Keep _showInputSheet, _showAddMenu same as before) ...
-  // [Code omitted for brevity as it was correct in previous step, insert here]
   void _showInputSheet({required bool isHabit, MindTask? existingTask}) {
     final ctrl = TextEditingController(text: existingTask?.title);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -339,6 +305,7 @@ class _BookPageState extends State<BookPage> {
             TextField(
               controller: ctrl,
               autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 hintText: "Title",
@@ -449,7 +416,12 @@ class _BookPageState extends State<BookPage> {
                       Colors.blue,
                       () {
                         Navigator.pop(ctx);
-                        _showNoteSheet();
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => const NoteEditorSheet(),
+                        );
                       },
                     ),
                   ),
@@ -474,9 +446,9 @@ class _BookPageState extends State<BookPage> {
       child: Container(
         height: 100,
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
+          color: Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -493,7 +465,8 @@ class _BookPageState extends State<BookPage> {
     );
   }
 
-  // ... (Date Helpers) ...
+  // --- 🗓️ DATE HELPERS ---
+
   int _calculatePageForDate(DateTime date) {
     final now = DateTime.now();
     final mondayNow = now.subtract(Duration(days: now.weekday - 1));
@@ -503,10 +476,10 @@ class _BookPageState extends State<BookPage> {
 
   void _onDateSelected(DateTime date) {
     setState(() {
-      _selectedDate = date;
+      _selectedDate = DateUtils.dateOnly(date);
       _forceInspectMode = false;
     });
-    _subscribeToDate(date);
+    _subscribeToDate(_selectedDate);
   }
 
   void _handleBackToToday() {
@@ -526,10 +499,17 @@ class _BookPageState extends State<BookPage> {
       lastDate: DateTime(2030),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: Colors.blue,
+          // ✅ CRITICAL FIX: Explicitly set DatePicker Theme properties
+          datePickerTheme: const DatePickerThemeData(
+            headerBackgroundColor: Colors.blue, // Forces Header to Blue
+            headerForegroundColor: Colors.white, // Forces Header Text to White
+            backgroundColor: Color(0xFF1E1E1E), // Dark body background
+            surfaceTintColor: Colors.transparent,
+          ),
+          colorScheme: const ColorScheme.dark(
+            primary: Colors.blue, // Selection circle color
             onPrimary: Colors.white,
-            surface: const Color(0xFF1E1E1E),
+            surface: Color(0xFF1E1E1E),
             onSurface: Colors.white,
           ),
           dialogBackgroundColor: const Color(0xFF1E1E1E),
@@ -537,22 +517,21 @@ class _BookPageState extends State<BookPage> {
         child: child!,
       ),
     );
-    if (picked != null && picked != _selectedDate) {
+    if (picked != null) {
       _onDateSelected(picked);
       _weekPageController.jumpToPage(_calculatePageForDate(picked));
     }
   }
 
+  // --- 🏗️ BUILD METHOD ---
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5);
-    final themeColor = Colors.blue;
-
-    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
     final isPast = _selectedDate.isBefore(DateUtils.dateOnly(DateTime.now()));
 
-    // SWITCH VIEW: If past and not inspecting, show Summary
+    // PAST VIEW MODE
     if (isPast && !_forceInspectMode) {
       return Scaffold(
         backgroundColor: bgColor,
@@ -566,6 +545,7 @@ class _BookPageState extends State<BookPage> {
               onPickerTap: _selectDateFromPicker,
               isDark: isDark,
               pageController: _weekPageController,
+              themeColor: Colors.blue,
             ),
             Expanded(
               child: BookSummaryView(
@@ -592,6 +572,7 @@ class _BookPageState extends State<BookPage> {
       appBar: AppBar(toolbarHeight: 0, backgroundColor: bgColor),
       body: Column(
         children: [
+          // 1. CALENDAR
           CalendarStrip(
             selectedDate: _selectedDate,
             onDateSelected: _onDateSelected,
@@ -599,14 +580,17 @@ class _BookPageState extends State<BookPage> {
             onPickerTap: _selectDateFromPicker,
             isDark: isDark,
             pageController: _weekPageController,
+            themeColor: Colors.blue,
           ),
+
+          // 2. SCROLLABLE CONTENT
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ACTIVE BOOK (Simplified: Just reading status, no complex order)
+                  // A. BOOK HERO (Active + Up Next)
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('users')
@@ -615,53 +599,88 @@ class _BookPageState extends State<BookPage> {
                         .where('status', isEqualTo: 'reading')
                         .limit(1)
                         .snapshots(),
-                    builder: (context, snapshot) {
+                    builder: (context, activeSnapshot) {
                       Book? activeBook;
-                      if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                        final doc = snapshot.data!.docs.first;
+                      if (activeSnapshot.hasData &&
+                          activeSnapshot.data!.docs.isNotEmpty) {
+                        final doc = activeSnapshot.data!.docs.first;
                         activeBook = Book.fromMap(
                           doc.data() as Map<String, dynamic>,
                           doc.id,
                         );
                       }
-                      return BookHero(
-                        book: activeBook,
-                        isDark: isDark,
-                        onProgressLogged: (delta) {
-                          if (activeBook != null)
-                            _updateBookProgress(
-                              activeBook.id,
-                              delta,
-                              activeBook.currentPage + delta,
-                            );
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(FirebaseAuth.instance.currentUser?.uid)
+                            .collection('books')
+                            .where('status', isEqualTo: 'wishlist')
+                            .limit(20)
+                            .snapshots(),
+                        builder: (context, wishlistSnapshot) {
+                          final uniqueTitles = <String>{};
+                          final upNextBooks =
+                              (wishlistSnapshot.data?.docs ?? [])
+                                  .map(
+                                    (d) => Book.fromMap(
+                                      d.data() as Map<String, dynamic>,
+                                      d.id,
+                                    ),
+                                  )
+                                  .where(
+                                    (b) => uniqueTitles.add(b.title),
+                                  ) // Deduplicate visual
+                                  .toList();
+                          return BookHero(
+                            book: activeBook,
+                            upNextBooks: upNextBooks,
+                            isDark: isDark,
+                            onProgressLogged: (delta) {
+                              if (activeBook != null)
+                                _updateBookProgress(
+                                  activeBook.id,
+                                  delta,
+                                  activeBook.currentPage + delta,
+                                );
+                            },
+                          );
                         },
                       );
                     },
                   ),
+
                   const SizedBox(height: 24),
-                  if (chores.isNotEmpty) _buildTasksCard(chores, isDark),
-                  if (chores.isNotEmpty) const SizedBox(height: 24),
-                  _buildHabitsSection(habits, isDark),
+
+                  // B. TASKS (Daily Chores)
+                  _buildTasksCard(chores, isDark),
+
                   const SizedBox(height: 24),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser?.uid)
-                        .collection('mind_notes')
-                        .orderBy('createdAt', descending: true)
-                        .limit(10)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final notes = (snapshot.data?.docs ?? [])
-                          .map(
-                            (d) => MindNote.fromMap(
-                              d.data() as Map<String, dynamic>,
-                              d.id,
-                            ),
-                          )
-                          .toList();
-                      return _buildNotesGrid(notes, isDark);
-                    },
+
+                  // C. HABITS (Streaks)
+                  HabitsSection(
+                    habits: habits,
+                    isDark: isDark,
+                    onToggle: _toggleTask,
+                    onLongPress: (t) =>
+                        _showInputSheet(isHabit: true, existingTask: t),
+                    onAddGhost: (title, isHabit) => _addNewTask(title, isHabit),
+                    onViewAll: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AllHabitsView()),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // D. NOTES (Ideas)
+                  NotesSection(
+                    isDark: isDark,
+                    onEditNote: (n) => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => NoteEditorSheet(existingNote: n),
+                    ),
                   ),
                 ],
               ),
@@ -672,42 +691,7 @@ class _BookPageState extends State<BookPage> {
     );
   }
 
-  // --- WIDGETS ---
-  Widget _buildEmptyFrame(
-    String text,
-    String btn,
-    VoidCallback onTap,
-    bool isDark,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.withOpacity(0.1)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              text,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              btn,
-              style: const TextStyle(
-                color: Colors.blue,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // --- LOCAL WIDGETS ---
 
   Widget _buildTasksCard(List<MindTask> tasks, bool isDark) {
     return Container(
@@ -720,7 +704,7 @@ class _BookPageState extends State<BookPage> {
             ? []
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -730,9 +714,13 @@ class _BookPageState extends State<BookPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.check_circle_outline, size: 16, color: Colors.grey),
-              SizedBox(width: 8),
-              Text(
+              const Icon(
+                Icons.check_circle_outline,
+                size: 16,
+                color: Colors.grey,
+              ),
+              const SizedBox(width: 8),
+              const Text(
                 "TASKS",
                 style: TextStyle(
                   fontSize: 12,
@@ -741,218 +729,96 @@ class _BookPageState extends State<BookPage> {
                   letterSpacing: 1.0,
                 ),
               ),
-              Spacer(),
+              const Spacer(),
               GestureDetector(
                 onTap: () => _showInputSheet(isHabit: false),
-                child: Icon(Icons.add, size: 20, color: Colors.blue),
+                child: const Icon(Icons.add, size: 20, color: Colors.blue),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          ...tasks.map(
-            (task) => GestureDetector(
-              onTap: () => _toggleTask(task),
-              onLongPress: () =>
-                  _showInputSheet(isHabit: false, existingTask: task),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: task.isDone ? Colors.blue : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: task.isDone
-                              ? Colors.blue
-                              : (isDark ? Colors.grey : Colors.grey.shade400),
-                          width: 2,
-                        ),
-                      ),
-                      child: task.isDone
-                          ? const Icon(
-                              Icons.check,
-                              size: 16,
-                              color: Colors.white,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        task.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: task.isDone
-                              ? (isDark ? Colors.white30 : Colors.black38)
-                              : (isDark ? Colors.white : Colors.black87),
-                          decoration: task.isDone
-                              ? TextDecoration.lineThrough
-                              : null,
-                          decorationColor: isDark
-                              ? Colors.white30
-                              : Colors.black38,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          if (tasks.isEmpty) ...[
+            _buildGhostTask("Wash dishes", isDark),
+            const SizedBox(height: 12),
+            _buildGhostTask("Tidy up room", isDark),
+          ] else
+            ...tasks.map((task) => _buildRealTask(task, isDark)),
         ],
       ),
     );
   }
 
-  Widget _buildHabitsSection(List<MindTask> habits, bool isDark) {
-    if (habits.isEmpty)
-      return _buildEmptyFrame(
-        "No habits tracked",
-        "Add Habit",
-        () => _showInputSheet(isHabit: true),
-        isDark,
-      );
-    return SizedBox(
-      height: 60,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: habits.length + 1,
-        separatorBuilder: (ctx, i) => const SizedBox(width: 12),
-        itemBuilder: (ctx, i) {
-          if (i == habits.length)
-            return GestureDetector(
-              onTap: () => _showInputSheet(isHabit: true),
-              child: Container(
-                width: 50,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.add, color: Colors.blue),
-              ),
-            );
-          return _buildHabitPill(habits[i], isDark);
-        },
-      ),
-    );
-  }
-
-  Widget _buildHabitPill(MindTask habit, bool isDark) {
-    final color = habit.isDone
-        ? Colors.blue
-        : (isDark ? Colors.white54 : Colors.grey);
+  Widget _buildGhostTask(String text, bool isDark) {
     return GestureDetector(
-      onTap: () => _toggleTask(habit),
-      onLongPress: () => _showInputSheet(isHabit: true, existingTask: habit),
-      child: Container(
-        width: 120,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: habit.isDone
-              ? Colors.blue.withOpacity(0.2)
-              : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.5)),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          habit.title,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+      onTap: () => _addNewTask(text, false), // Add on tap
+      child: Opacity(
+        opacity: 0.3,
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey, width: 2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: TextStyle(
+                fontSize: 15,
+                fontStyle: FontStyle.italic,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildNotesGrid(List<MindNote> notes, bool isDark) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: notes.length + 1,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.1,
-      ),
-      itemBuilder: (context, index) {
-        if (index == notes.length)
-          return GestureDetector(
-            onTap: () => _showNoteSheet(),
-            child: Container(
+  Widget _buildRealTask(MindTask task, bool isDark) {
+    return GestureDetector(
+      onTap: () => _toggleTask(task),
+      onLongPress: () => _showInputSheet(isHabit: false, existingTask: task),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                color: task.isDone ? Colors.blue : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: task.isDone
+                      ? Colors.blue
+                      : (isDark ? Colors.grey : Colors.grey.shade400),
+                  width: 2,
+                ),
               ),
-              child: const Center(
-                child: Icon(Icons.add, size: 40, color: Colors.blue),
+              child: task.isDone
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                task.title,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: task.isDone
+                      ? Colors.white30
+                      : (isDark ? Colors.white : Colors.black87),
+                  decoration: task.isDone ? TextDecoration.lineThrough : null,
+                ),
               ),
             ),
-          );
-        final note = notes[index];
-        return GestureDetector(
-          onLongPress: () => _showNoteSheet(existingNote: note),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1A2238) : Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark
-                    ? Colors.blue.withOpacity(0.1)
-                    : Colors.blue.shade100,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  note.tag,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.blue.shade200 : Colors.blue.shade800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  note.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Text(
-                    note.body,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark
-                          ? Colors.blueGrey.shade200
-                          : Colors.blueGrey.shade700,
-                      height: 1.3,
-                    ),
-                    overflow: TextOverflow.fade,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }

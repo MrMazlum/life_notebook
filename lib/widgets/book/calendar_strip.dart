@@ -4,10 +4,11 @@ import 'package:intl/intl.dart';
 class CalendarStrip extends StatelessWidget {
   final DateTime selectedDate;
   final Function(DateTime) onDateSelected;
-  final Function() onBackToToday;
+  final VoidCallback onBackToToday;
   final VoidCallback onPickerTap;
   final bool isDark;
   final PageController pageController;
+  final Color themeColor;
 
   const CalendarStrip({
     super.key,
@@ -17,6 +18,7 @@ class CalendarStrip extends StatelessWidget {
     required this.onPickerTap,
     required this.isDark,
     required this.pageController,
+    this.themeColor = Colors.blue,
   });
 
   DateTime _getMondayForPage(int index) {
@@ -28,7 +30,6 @@ class CalendarStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeColor = Colors.blue;
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Container(
@@ -64,6 +65,7 @@ class CalendarStrip extends StatelessWidget {
                     color: textColor,
                   ),
                 ),
+                // ✅ CHANGED: Grid Icon -> Calendar Icon
                 GestureDetector(
                   onTap: onPickerTap,
                   child: Container(
@@ -73,10 +75,10 @@ class CalendarStrip extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons.grid_view_rounded,
+                      Icons.calendar_month_rounded,
                       color: themeColor,
-                      size: 22,
-                    ), // MATCHES SCREENSHOT
+                      size: 24,
+                    ),
                   ),
                 ),
               ],
@@ -84,7 +86,7 @@ class CalendarStrip extends StatelessWidget {
           ),
           const SizedBox(height: 15),
           SizedBox(
-            height: 75,
+            height: 70,
             child: PageView.builder(
               controller: pageController,
               itemBuilder: (context, index) {
@@ -96,7 +98,7 @@ class CalendarStrip extends StatelessWidget {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: weekDays
-                      .map((date) => _buildDayItem(date, themeColor, isDark))
+                      .map((date) => _buildDayItem(date))
                       .toList(),
                 );
               },
@@ -107,9 +109,10 @@ class CalendarStrip extends StatelessWidget {
     );
   }
 
-  Widget _buildDayItem(DateTime date, Color themeColor, bool isDark) {
+  Widget _buildDayItem(DateTime date) {
     final isSelected = DateUtils.isSameDay(date, selectedDate);
     final isToday = DateUtils.isSameDay(date, DateTime.now());
+
     return Expanded(
       child: GestureDetector(
         onTap: () => onDateSelected(date),
@@ -118,7 +121,7 @@ class CalendarStrip extends StatelessWidget {
           decoration: BoxDecoration(
             color: isSelected
                 ? themeColor
-                : (isDark ? Colors.white10 : Colors.grey.shade200),
+                : (isDark ? Colors.white10 : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(16),
             border: isToday && !isSelected
                 ? Border.all(

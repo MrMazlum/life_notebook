@@ -1,74 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-
-class BookDailyLog {
-  final DateTime date;
-  List<MindTask> tasks;
-  int pagesRead; // Pages read TODAY (delta)
-  int endPage; // Page number reached by end of this day (snapshot)
-
-  BookDailyLog({
-    DateTime? date,
-    List<MindTask>? tasks,
-    this.pagesRead = 0,
-    this.endPage = 0,
-  }) : date = date ?? DateTime.now(),
-       tasks = tasks ?? [];
-
-  Map<String, dynamic> toMap() {
-    return {
-      'date': date.toIso8601String().split('T')[0],
-      'tasks': tasks.map((t) => t.toMap()).toList(),
-      'pagesRead': pagesRead,
-      'endPage': endPage,
-    };
-  }
-
-  factory BookDailyLog.fromMap(Map<String, dynamic> map, DateTime date) {
-    return BookDailyLog(
-      date: date,
-      tasks: (map['tasks'] as List<dynamic>? ?? [])
-          .map((t) => MindTask.fromMap(t))
-          .toList(),
-      pagesRead: map['pagesRead'] ?? 0,
-      endPage: map['endPage'] ?? 0,
-    );
-  }
-}
-
-class MindTask {
-  final String id;
-  String title;
-  bool isDone;
-  final bool isHabit;
-  final String? reminderTime;
-
-  MindTask({
-    required this.id,
-    required this.title,
-    this.isDone = false,
-    required this.isHabit,
-    this.reminderTime,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'title': title,
-    'isDone': isDone,
-    'isHabit': isHabit,
-    'reminderTime': reminderTime,
-  };
-
-  factory MindTask.fromMap(Map<String, dynamic> map) {
-    return MindTask(
-      id: map['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: map['title'] ?? '',
-      isDone: map['isDone'] ?? false,
-      isHabit: map['isHabit'] ?? false,
-      reminderTime: map['reminderTime'],
-    );
-  }
-}
 
 class Book {
   final String id;
@@ -76,9 +6,9 @@ class Book {
   final String author;
   final String coverUrl;
   final int totalPages;
-  final int currentPage; // Global current page
-  final String status;
-  final DateTime? lastRead;
+  final int currentPage;
+  final String status; // 'reading', 'finished', 'wishlist'
+  final double progress;
 
   Book({
     required this.id,
@@ -88,10 +18,19 @@ class Book {
     required this.totalPages,
     required this.currentPage,
     required this.status,
-    this.lastRead,
-  });
+  }) : progress = totalPages > 0 ? currentPage / totalPages : 0.0;
 
-  double get progress => totalPages == 0 ? 0 : currentPage / totalPages;
+  factory Book.fromMap(Map<String, dynamic> data, String id) {
+    return Book(
+      id: id,
+      title: data['title'] ?? '',
+      author: data['author'] ?? '',
+      coverUrl: data['coverUrl'] ?? '',
+      totalPages: data['totalPages'] ?? 0,
+      currentPage: data['currentPage'] ?? 0,
+      status: data['status'] ?? 'wishlist',
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -101,28 +40,46 @@ class Book {
       'totalPages': totalPages,
       'currentPage': currentPage,
       'status': status,
-      'lastRead': lastRead ?? FieldValue.serverTimestamp(),
     };
   }
+}
 
-  factory Book.fromMap(Map<String, dynamic> map, String id) {
-    return Book(
-      id: id,
-      title: map['title'] ?? 'Unknown',
-      author: map['author'] ?? 'Unknown',
-      coverUrl: map['coverUrl'] ?? '',
-      totalPages: map['totalPages'] ?? 100,
-      currentPage: map['currentPage'] ?? 0,
-      status: map['status'] ?? 'wishlist',
-      lastRead: (map['lastRead'] as Timestamp?)?.toDate(),
-    );
-  }
+class MindTask {
+  String id;
+  String title;
+  bool isHabit;
+  bool isDone;
+  int streak; // ✅ ADDED STREAK FIELD
+
+  MindTask({
+    required this.id,
+    required this.title,
+    required this.isHabit,
+    required this.isDone,
+    this.streak = 0, // Default 0
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'isHabit': isHabit,
+    'isDone': isDone,
+    'streak': streak, // Save streak
+  };
+
+  factory MindTask.fromMap(Map<String, dynamic> map) => MindTask(
+    id: map['id'] ?? '',
+    title: map['title'] ?? '',
+    isHabit: map['isHabit'] ?? false,
+    isDone: map['isDone'] ?? false,
+    streak: map['streak'] ?? 0, // Load streak
+  );
 }
 
 class MindNote {
   final String id;
-  String title;
-  String body;
+  final String title;
+  final String body;
   final String tag;
   final DateTime createdAt;
 
@@ -138,7 +95,7 @@ class MindNote {
     'title': title,
     'body': body,
     'tag': tag,
-    'createdAt': FieldValue.serverTimestamp(),
+    'createdAt': Timestamp.fromDate(createdAt),
   };
 
   factory MindNote.fromMap(Map<String, dynamic> map, String id) {
@@ -146,8 +103,43 @@ class MindNote {
       id: id,
       title: map['title'] ?? '',
       body: map['body'] ?? '',
-      tag: map['tag'] ?? 'General',
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      tag: map['tag'] ?? '',
+      createdAt: (map['createdAt'] as Timestamp).toDate(),
+    );
+  }
+}
+
+class BookDailyLog {
+  DateTime date;
+  int pagesRead;
+  int endPage;
+  List<MindTask> tasks;
+
+  BookDailyLog({
+    DateTime? date,
+    this.pagesRead = 0,
+    this.endPage = 0,
+    List<MindTask>? tasks,
+  }) : date = date ?? DateTime.now(),
+       this.tasks = tasks ?? [];
+
+  Map<String, dynamic> toMap() => {
+    'date': Timestamp.fromDate(date),
+    'pagesRead': pagesRead,
+    'endPage': endPage,
+    'tasks': tasks.map((t) => t.toMap()).toList(),
+  };
+
+  factory BookDailyLog.fromMap(Map<String, dynamic> map, DateTime date) {
+    return BookDailyLog(
+      date: date,
+      pagesRead: map['pagesRead'] ?? 0,
+      endPage: map['endPage'] ?? 0,
+      tasks:
+          (map['tasks'] as List<dynamic>?)
+              ?.map((t) => MindTask.fromMap(t))
+              .toList() ??
+          [],
     );
   }
 }
