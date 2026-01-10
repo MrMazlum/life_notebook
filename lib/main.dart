@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'firebase_options.dart';
 
 // PAGE IMPORTS
@@ -9,7 +10,7 @@ import 'pages/health_page.dart';
 import 'pages/book_page.dart';
 import 'pages/finance_page.dart';
 import 'pages/schedule_page.dart';
-import 'pages/dashboard_page.dart'; // Standard import now
+import 'pages/dashboard_page.dart';
 import 'pages/login_page.dart';
 
 void main() async {
@@ -19,7 +20,7 @@ void main() async {
 }
 
 // Global Theme Mode Controller
-final ValueNotifier<ThemeMode> _themeNotifier = ValueNotifier(ThemeMode.light);
+final ValueNotifier<ThemeMode> _themeNotifier = ValueNotifier(ThemeMode.dark);
 
 // Global Page Index Controller
 final ValueNotifier<int> _pageIndexNotifier = ValueNotifier(2);
@@ -75,7 +76,7 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
       builder: (context, ThemeMode currentMode, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Life Notebook',
+          title: 'Tortul',
 
           // LIGHT THEME
           theme: ThemeData(
@@ -120,7 +121,10 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
+                  backgroundColor: Colors.black, // Dark loading screen
+                  body: Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
                 );
               }
               if (snapshot.hasData) {
@@ -149,6 +153,117 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _pageIndexNotifier.value);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFirstTimeThemeAndPrompt();
+    });
+  }
+
+  Future<void> _checkFirstTimeThemeAndPrompt() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDocRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid);
+    final docSnapshot = await userDocRef.get();
+
+    if (docSnapshot.exists && docSnapshot.data()!.containsKey('isDarkMode')) {
+      return;
+    }
+
+    final brightness = View.of(context).platformDispatcher.platformBrightness;
+    final isSystemDark = brightness == Brightness.dark;
+
+    if (isSystemDark) {
+      await userDocRef.set({'isDarkMode': true}, SetOptions(merge: true));
+    } else {
+      if (mounted) _showThemeChoiceDialog(userDocRef);
+    }
+  }
+
+  void _showThemeChoiceDialog(DocumentReference userRef) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.palette_outlined, color: Colors.white),
+              SizedBox(width: 12),
+              Text("Theme Preference", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: const Text(
+            "We noticed your device is in Light Mode.\n\n"
+            "Tortul is designed for Dark Mode, but we want you to be comfortable.\n\n"
+            "You can always change this later from the Settings menu.",
+            style: TextStyle(color: Colors.white70, height: 1.5),
+          ),
+
+          // WE REMOVE DEFAULT ACTIONS PADDING TO HANDLE IT OURSELVES
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+
+          actions: [
+            // --- CUSTOM ROW FOR IDENTICAL BUTTONS ---
+            Row(
+              children: [
+                // BUTTON 1: USE LIGHT MODE (Bordered)
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _themeNotifier.value = ThemeMode.light;
+                      userRef.set({
+                        'isDarkMode': false,
+                      }, SetOptions(merge: true));
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: const BorderSide(
+                        color: Colors.white70,
+                      ), // Frame Color
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text("Use Light Mode"),
+                  ),
+                ),
+
+                const SizedBox(width: 12), // Spacing between buttons
+                // BUTTON 2: KEEP DARK MODE (Filled)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      userRef.set({
+                        'isDarkMode': true,
+                      }, SetOptions(merge: true));
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text("Keep Dark Mode"),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -157,7 +272,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // This function switches the tab
   void _onItemTapped(int index) {
     _pageIndexNotifier.value = index;
     _pageController.animateToPage(
@@ -183,15 +297,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _signOut() async {
+    await GoogleSignIn().signOut();
     await FirebaseAuth.instance.signOut();
   }
 
-  // Helper to build the pages list dynamically so we can pass the function
   List<Widget> _getPages() {
     return [
       const HealthPage(),
       const BookPage(),
-      // We pass the function here so the dashboard buttons work!
       DashboardPage(onNavigate: _onItemTapped),
       const FinancePage(),
       const SchedulePage(),
@@ -208,7 +321,6 @@ class _HomePageState extends State<HomePage> {
         return ValueListenableBuilder<int>(
           valueListenable: _pageIndexNotifier,
           builder: (context, int currentIndex, _) {
-            // Determine active color for center button based on theme
             final Color centerActiveColor = isDark
                 ? Colors.grey[600]!
                 : const Color(0xFF424242);
@@ -228,10 +340,11 @@ class _HomePageState extends State<HomePage> {
               appBar: AppBar(
                 backgroundColor: appBarColor,
                 title: const Text(
-                  'Life Notebook',
+                  'T O R T U L',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    letterSpacing: 2.0,
                   ),
                 ),
                 centerTitle: true,
@@ -261,7 +374,7 @@ class _HomePageState extends State<HomePage> {
               body: PageView(
                 controller: _pageController,
                 onPageChanged: _onPageChanged,
-                children: _getPages(), // Using our helper function
+                children: _getPages(),
               ),
 
               bottomNavigationBar: BottomAppBar(
@@ -290,7 +403,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    // --- CENTER BUTTON ---
                     Expanded(
                       child: Center(
                         child: GestureDetector(

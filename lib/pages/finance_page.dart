@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <--- IMPORT ADDED
+import 'package:firebase_auth/firebase_auth.dart';
 
 // MODELS
 import '../models/finance_models.dart';
@@ -12,6 +11,7 @@ import '../widgets/finance/past_month_summary.dart';
 import '../widgets/finance/finance_dashboard.dart';
 import '../widgets/finance/edit_monthly_budget_dialog.dart';
 import '../widgets/finance/finance_header.dart';
+import '../widgets/finance/future_month_planner.dart'; // <--- NEW WIDGET IMPORT
 
 class FinancePage extends StatefulWidget {
   const FinancePage({super.key});
@@ -25,6 +25,12 @@ class _FinancePageState extends State<FinancePage> {
   bool _isInspectingPast = false;
   bool _showChart = false;
 
+  // NEW: Toggle for when user decides to "Unlock" a future month
+  bool _isPlanningMode = false;
+
+  // Default to Euro
+  String _currencySymbol = '€';
+
   final CollectionReference _bucketsRef = FirebaseFirestore.instance.collection(
     'finance_buckets',
   );
@@ -32,76 +38,29 @@ class _FinancePageState extends State<FinancePage> {
     'finance_transactions',
   );
 
-  // --- INITIALIZATION ---
   @override
   void initState() {
     super.initState();
     _ensureBucketsExist();
+    _loadUserCurrency();
   }
 
-  // Create default buckets if user has none
-  Future<void> _ensureBucketsExist() async {
+  // LOAD SAVED CURRENCY
+  Future<void> _loadUserCurrency() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return; // Wait for login
-
-    // Check buckets for REAL user ID
-    final snapshot = await _bucketsRef
-        .where('userId', isEqualTo: user.uid) // <--- CHECK REAL ID
-        .get();
-
-    if (snapshot.docs.isEmpty) {
-      final defaults = [
-        FinanceBucket(
-          id: '',
-          name: 'Rent',
-          limit: 800,
-          iconCode: Icons.home_rounded.codePoint,
-          colorValue: Colors.blue.value,
-          isFixed: true,
-        ),
-        FinanceBucket(
-          id: '',
-          name: 'Groceries',
-          limit: 200,
-          iconCode: Icons.shopping_cart_rounded.codePoint,
-          colorValue: Colors.green.value,
-        ),
-        FinanceBucket(
-          id: '',
-          name: 'Dining',
-          limit: 150,
-          iconCode: Icons.restaurant_rounded.codePoint,
-          colorValue: Colors.orange.value,
-        ),
-        FinanceBucket(
-          id: '',
-          name: 'Transport',
-          limit: 100,
-          iconCode: Icons.directions_bus_rounded.codePoint,
-          colorValue: Colors.indigo.value,
-        ),
-        FinanceBucket(
-          id: '',
-          name: 'Fun',
-          limit: 100,
-          iconCode: Icons.movie_rounded.codePoint,
-          colorValue: Colors.purple.value,
-        ),
-        FinanceBucket(
-          id: '',
-          name: 'Subscriptions',
-          limit: 60,
-          iconCode: Icons.subscriptions_rounded.codePoint,
-          colorValue: Colors.teal.value,
-          isFixed: true,
-        ),
-      ];
-
-      for (var b in defaults) {
-        // Add userId to the bucket map so it belongs to this user
-        final bucketMap = b.toMap();
-        bucketMap['userId'] = user.uid; // <--- IMPORTANT: LINK BUCKET TO USER
-        await _bucketsRef.add(bucketMap);
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists &&
+          doc.data() != null &&
+          doc.data()!.containsKey('currencySymbol')) {
+        if (mounted) {
+          setState(() {
+            _currencySymbol = doc.data()!['currencySymbol'];
+          });
+        }
       }
     }
   }
@@ -128,10 +87,175 @@ class _FinancePageState extends State<FinancePage> {
         1,
       );
       _isInspectingPast = false;
+      _isPlanningMode = false; // <--- Reset "Plan" mode when switching months
     });
   }
 
-  // --- UPDATE LIMIT ---
+  Future<void> _ensureBucketsExist() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final snapshot = await _bucketsRef
+        .where('userId', isEqualTo: user.uid)
+        .get();
+    if (snapshot.docs.isEmpty) {
+      final defaults = [
+        FinanceBucket(
+          id: '',
+          name: 'Groceries',
+          limit: 300,
+          iconCode: 57522, // Shopping cart
+          colorValue: Colors.orange.value,
+        ),
+        FinanceBucket(
+          id: '',
+          name: 'Transport',
+          limit: 100,
+          iconCode: 57563, // Bus
+          colorValue: Colors.blue.value,
+        ),
+        FinanceBucket(
+          id: '',
+          name: 'Fun',
+          limit: 150,
+          iconCode: 57366, // Ticket
+          colorValue: Colors.purple.value,
+        ),
+      ];
+
+      for (var b in defaults) {
+        await _bucketsRef.add(b.toMap());
+      }
+    }
+  }
+
+  // --- CURRENCY PICKER ---
+  void _showCurrencyPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final currencies = [
+          '\$',
+          '€',
+          '£',
+          '¥',
+          '₺',
+          '₹',
+          '₽',
+          '₩',
+          'R\$',
+          '฿',
+          '₫',
+          'Rp',
+          '₪',
+          'kr',
+          'Fr',
+          'zł',
+          'R',
+          '₱',
+          '₦',
+          'C\$',
+        ];
+
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.55,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Select Currency",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.grey : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: GridView.builder(
+                  itemCount: currencies.length,
+                  physics: const BouncingScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 15,
+                    crossAxisSpacing: 15,
+                    childAspectRatio: 1.2,
+                  ),
+                  itemBuilder: (context, index) {
+                    final symbol = currencies[index];
+                    final isSelected = _currencySymbol == symbol;
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _currencySymbol = symbol);
+
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .set({
+                                'currencySymbol': symbol,
+                              }, SetOptions(merge: true));
+                        }
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.green
+                              : (isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200),
+                          borderRadius: BorderRadius.circular(16),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            symbol,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _updateBucketLimit(
     String bucketId,
     double currentLimit,
@@ -171,7 +295,7 @@ class _FinancePageState extends State<FinancePage> {
                   fontSize: 18,
                 ),
                 decoration: InputDecoration(
-                  labelText: "Monthly Limit (\$)",
+                  labelText: "Monthly Limit ($_currencySymbol)",
                   hintText: "e.g. 500",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -219,6 +343,7 @@ class _FinancePageState extends State<FinancePage> {
       builder: (ctx) => EditMonthlyBudgetDialog(
         buckets: currentBuckets,
         onUpdateLimit: _updateBucketLimit,
+        currencySymbol: _currencySymbol,
       ),
     );
   }
@@ -226,61 +351,60 @@ class _FinancePageState extends State<FinancePage> {
   void _onEditTransaction(FinanceTransaction tx, List<FinanceBucket> buckets) {
     showDialog(
       context: context,
-      builder: (context) =>
-          AddTransactionDialog(buckets: buckets, transactionToEdit: tx),
+      builder: (context) => AddTransactionDialog(
+        buckets: buckets,
+        transactionToEdit: tx,
+        currencySymbol: _currencySymbol,
+      ),
     );
   }
 
   void _onAddTransaction(List<FinanceBucket> buckets) {
     showDialog(
       context: context,
-      builder: (context) => AddTransactionDialog(buckets: buckets),
+      builder: (context) => AddTransactionDialog(
+        buckets: buckets,
+        currencySymbol: _currencySymbol,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // GET CURRENT USER
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
 
-    // 1. STREAM BUCKETS
+    if (user == null) return const Center(child: CircularProgressIndicator());
+
     return StreamBuilder<QuerySnapshot>(
-      stream: _bucketsRef
-          .where('userId', isEqualTo: user.uid)
-          .snapshots(), // <--- REAL ID
+      stream: _bucketsRef.where('userId', isEqualTo: user.uid).snapshots(),
       builder: (context, bucketSnap) {
-        if (!bucketSnap.hasData) {
+        if (!bucketSnap.hasData)
           return const Center(child: CircularProgressIndicator());
-        }
 
         final buckets = bucketSnap.data!.docs
             .map((doc) => FinanceBucket.fromFirestore(doc))
             .toList();
 
-        // 2. STREAM TRANSACTIONS
         return StreamBuilder<QuerySnapshot>(
           stream: _txRef
-              .where('userId', isEqualTo: user.uid) // <--- REAL ID
+              .where('userId', isEqualTo: user.uid)
               .orderBy('date', descending: true)
               .snapshots(),
           builder: (context, txSnap) {
-            if (!txSnap.hasData) {
+            if (!txSnap.hasData)
               return const Center(child: CircularProgressIndicator());
-            }
 
             final allTransactions = txSnap.data!.docs
                 .map((doc) => FinanceTransaction.fromFirestore(doc))
                 .toList();
-
-            final monthTransactions = allTransactions.where((t) {
-              return t.date.year == _selectedDate.year &&
-                  t.date.month == _selectedDate.month;
-            }).toList();
+            final monthTransactions = allTransactions
+                .where(
+                  (t) =>
+                      t.date.year == _selectedDate.year &&
+                      t.date.month == _selectedDate.month,
+                )
+                .toList();
 
             final monthlyExpense = monthTransactions
                 .where((t) => t.isExpense)
@@ -289,7 +413,6 @@ class _FinancePageState extends State<FinancePage> {
                 .where((t) => !t.isExpense)
                 .fold(0.0, (sum, t) => sum + t.amount);
 
-            // Calculate 'spent' for each bucket dynamically
             final calculatedBuckets = buckets.map((bucket) {
               final bucketSpent = monthTransactions
                   .where((t) => t.isExpense && t.categoryId == bucket.id)
@@ -319,22 +442,42 @@ class _FinancePageState extends State<FinancePage> {
                       onResetDate: () => setState(() {
                         _selectedDate = DateTime.now();
                         _isInspectingPast = false;
+                        _isPlanningMode = false;
                       }),
+                      onSettingsTap: _showCurrencyPicker,
                     ),
+
+                    // --- VIEW LOGIC SWITCHER ---
                     if (!_isCurrentMonth &&
                         !_isFutureMonth &&
                         !_isInspectingPast)
+                      // 1. PAST MONTH VIEW
                       PastMonthSummary(
                         selectedDate: _selectedDate,
                         income: monthlyIncome,
                         expense: monthlyExpense,
                         isDark: isDark,
+                        currencySymbol: _currencySymbol,
                         onBackToToday: () =>
                             setState(() => _selectedDate = DateTime.now()),
                         onInspect: () =>
                             setState(() => _isInspectingPast = true),
                       )
+                    else if (_isFutureMonth && !_isPlanningMode)
+                      // 2. FUTURE MONTH (LOCKED) VIEW - NEW!
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: FutureMonthPlanner(
+                          selectedDate: _selectedDate,
+                          onPlan: () {
+                            setState(() {
+                              _isPlanningMode = true; // Unlock dashboard
+                            });
+                          },
+                        ),
+                      )
                     else
+                      // 3. DASHBOARD VIEW (Current, Planning, or Inspected)
                       FinanceDashboard(
                         isDark: isDark,
                         showChart: _showChart,
@@ -342,6 +485,9 @@ class _FinancePageState extends State<FinancePage> {
                         buckets: calculatedBuckets,
                         monthlyIncome: monthlyIncome,
                         monthlyExpense: monthlyExpense,
+                        currencySymbol: _currencySymbol,
+                        // NEW: Pass the flag to hide the white bar!
+                        isFuture: _isFutureMonth,
                         onEditTransaction: (tx) =>
                             _onEditTransaction(tx, calculatedBuckets),
                         onUpdateBucketLimit: _updateBucketLimit,

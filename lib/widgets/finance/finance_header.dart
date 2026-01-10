@@ -5,6 +5,7 @@ class FinanceHeader extends StatelessWidget {
   final DateTime selectedDate;
   final Function(int) onMonthChanged;
   final VoidCallback onResetDate;
+  final VoidCallback onSettingsTap;
   final bool isInspectingPast;
   final bool showChart;
   final Function(bool) onChartToggle;
@@ -14,6 +15,7 @@ class FinanceHeader extends StatelessWidget {
     required this.selectedDate,
     required this.onMonthChanged,
     required this.onResetDate,
+    required this.onSettingsTap,
     required this.isInspectingPast,
     required this.showChart,
     required this.onChartToggle,
@@ -38,43 +40,50 @@ class FinanceHeader extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // 1. LEFT: Back Button (Always Visible)
+            // 1. LEFT: Back Button OR Currency Switcher
             Align(
               alignment: Alignment.centerLeft,
-              child: GestureDetector(
-                onTap: () {
-                  if (_isCurrentMonth) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("You are already up to date!"),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 1),
+              child: _isCurrentMonth
+                  ? GestureDetector(
+                      onTap: onSettingsTap,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        // --- CHANGED ICON HERE ---
+                        child: Icon(
+                          Icons.currency_exchange, // Updated Icon
+                          color: subTextColor,
+                          size: 20,
+                        ),
                       ),
-                    );
-                  } else {
-                    onResetDate();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.undo_rounded,
-                    color: primaryColor,
-                    size: 20,
-                  ),
-                ),
-              ),
+                    )
+                  : GestureDetector(
+                      onTap: onResetDate,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.undo_rounded,
+                          color: primaryColor,
+                          size: 20,
+                        ),
+                      ),
+                    ),
             ),
 
             // 2. CENTER: Month Navigator
             Align(
               alignment: Alignment.center,
               child: Transform.translate(
-                offset: const Offset(0, -4), // FIX: Shifts text up by 4 pixels
+                offset: const Offset(0, -4),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -110,7 +119,7 @@ class FinanceHeader extends StatelessWidget {
               ),
             ),
 
-            // 3. RIGHT: Toggle Buttons (Only if visible)
+            // 3. RIGHT: Toggle Buttons
             if (_isCurrentMonth || isInspectingPast)
               Align(
                 alignment: Alignment.centerRight,

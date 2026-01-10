@@ -6,6 +6,7 @@ class PastMonthSummary extends StatelessWidget {
   final double income;
   final double expense;
   final bool isDark;
+  final String currencySymbol; // <--- NEW PARAMETER
   final VoidCallback onBackToToday;
   final VoidCallback onInspect;
 
@@ -15,6 +16,7 @@ class PastMonthSummary extends StatelessWidget {
     required this.income,
     required this.expense,
     required this.isDark,
+    required this.currencySymbol, // <--- REQUIRED HERE
     required this.onBackToToday,
     required this.onInspect,
   });
@@ -71,8 +73,8 @@ class PastMonthSummary extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   isPositive
-                      ? "You saved \$${netSavings.toStringAsFixed(0)} in ${DateFormat('MMMM').format(selectedDate)}."
-                      : "You spent \$${netSavings.abs().toStringAsFixed(0)} more than you earned.",
+                      ? "You saved $currencySymbol${netSavings.toStringAsFixed(0)} in ${DateFormat('MMMM').format(selectedDate)}."
+                      : "You spent $currencySymbol${netSavings.abs().toStringAsFixed(0)} more than you earned.",
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
@@ -143,7 +145,7 @@ class PastMonthSummary extends StatelessWidget {
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         const SizedBox(height: 4),
         Text(
-          "\$${amount.toStringAsFixed(0)}",
+          "$currencySymbol${amount.toStringAsFixed(0)}", // <--- USED SYMBOL HERE
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,

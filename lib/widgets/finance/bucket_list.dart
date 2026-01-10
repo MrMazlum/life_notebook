@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'budget_progress_bar.dart';
-import '../../models/finance_models.dart'; // Ensure this points to your new file
+import '../../models/finance_models.dart';
 
 class BucketList extends StatelessWidget {
   final List<FinanceBucket> buckets;
   final String? selectedBucketId;
+  final String currencySymbol; // NEW
   final Function(String?) onBucketSelected;
 
   const BucketList({
     super.key,
     required this.buckets,
     required this.selectedBucketId,
+    required this.currencySymbol, // NEW
     required this.onBucketSelected,
   });
 
@@ -62,7 +64,7 @@ class BucketList extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "\$${bucket.spent.toInt()}",
+                      "$currencySymbol${bucket.spent.toInt()}", // UPDATED
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,

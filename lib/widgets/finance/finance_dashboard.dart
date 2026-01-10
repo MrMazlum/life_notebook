@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+// MODELS
 import '../../models/finance_models.dart';
+// WIDGETS
 import 'budget_progress_bar.dart';
-import 'pie_chart_view.dart';
+import 'pie_chart_view.dart'; // <--- Critical for ChartData
 import 'bucket_list.dart';
 import 'transaction_list.dart';
 
@@ -14,6 +16,8 @@ class FinanceDashboard extends StatefulWidget {
   final List<FinanceBucket> buckets;
   final double monthlyIncome;
   final double monthlyExpense;
+  final String currencySymbol;
+  final bool isFuture; // <--- NEW: Tells dashboard if this is a future month
   final Function(FinanceTransaction) onEditTransaction;
   final Function(String, double, String) onUpdateBucketLimit;
   final VoidCallback onEditAllBudgets;
@@ -26,6 +30,8 @@ class FinanceDashboard extends StatefulWidget {
     required this.buckets,
     required this.monthlyIncome,
     required this.monthlyExpense,
+    required this.currencySymbol,
+    this.isFuture = false, // Default to false
     required this.onEditTransaction,
     required this.onUpdateBucketLimit,
     required this.onEditAllBudgets,
@@ -73,6 +79,7 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
           .toList();
     }
 
+    // Chart Totals
     final chartTotal = widget.buckets.fold(
       0.0,
       (sum, item) => sum + item.spent,
@@ -80,6 +87,8 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
     final chartData = widget.buckets
         .map((b) => ChartData(b.id, b.name, b.spent, b.color, b.icon))
         .toList();
+
+    // Progress Bar Calculations
     final totalBudgetLimit = widget.buckets.fold(
       0.0,
       (sum, b) => sum + b.limit,
@@ -89,18 +98,25 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
       (sum, b) => sum + b.spent,
     );
 
-    final now = DateTime.now();
-    final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
-    final timeProgress = (now.day / daysInMonth).clamp(0.0, 1.0);
+    // --- FIX: CALCULATE IDEAL SPEND ---
     double totalIdealSpent = 0.0;
 
-    for (var b in widget.buckets) {
-      if (b.isFixed) {
-        totalIdealSpent += b.limit;
-      } else {
-        totalIdealSpent += b.limit * timeProgress;
+    // If it's the future, the "Ideal" spend right now is 0.
+    // If it's current/past, we calculate based on days.
+    if (!widget.isFuture) {
+      final now = DateTime.now();
+      final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+      final timeProgress = (now.day / daysInMonth).clamp(0.0, 1.0);
+
+      for (var b in widget.buckets) {
+        if (b.isFixed) {
+          totalIdealSpent += b.limit;
+        } else {
+          totalIdealSpent += b.limit * timeProgress;
+        }
       }
     }
+    // ----------------------------------
 
     FinanceBucket? selectedBucket;
     if (_selectedBucketId != null) {
@@ -141,59 +157,90 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
           ),
         ),
 
-        // --- TOTAL BUDGET PROGRESS BAR (Only if chart is hidden) ---
+        // --- TOTAL BUDGET PROGRESS BAR ---
         if (!widget.showChart)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Total Monthly Budget",
-                      style: TextStyle(fontSize: 12, color: subTextColor),
-                    ),
-                    GestureDetector(
-                      onTap: widget.onEditAllBudgets,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        color: Colors.transparent,
-                        child: Row(
-                          children: [
-                            Text(
-                              "Edit All ",
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: subTextColor,
-                              ),
-                            ),
-                            Icon(Icons.edit, size: 12, color: subTextColor),
-                          ],
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: widget.isDark
+                    ? Colors.green.withOpacity(0.08)
+                    : Colors.green.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.green.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Total Monthly Budget",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                BudgetProgressBar(
-                  spent: totalBudgetSpent,
-                  limit: totalBudgetLimit,
-                  color: primaryColor,
-                  isFixed: false,
-                  customIdeal: totalIdealSpent,
-                ),
-              ],
+                      GestureDetector(
+                        onTap: widget.onEditAllBudgets,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: widget.isDark
+                                ? Colors.black26
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                "Edit All",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.edit, size: 12, color: primaryColor),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- THE BAR ---
+                  BudgetProgressBar(
+                    spent: totalBudgetSpent,
+                    limit: totalBudgetLimit,
+                    color: primaryColor,
+                    isFixed: false,
+                    customIdeal: totalIdealSpent, // Calculated above
+                    isFuture: widget.isFuture, // Pass the flag down
+                    height: 24,
+                  ),
+                ],
+              ),
             ),
           ),
 
-        // --- CHART / LIST SWITCHER (FIXED) ---
+        // --- CHART / LIST SWITCHER ---
+        const SizedBox(height: 10),
         SizedBox(
           height: widget.showChart ? 320 : 210,
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            // FIX: This layoutBuilder prevents the overflow during transition
             layoutBuilder: (currentChild, previousChildren) {
               return Stack(
                 alignment: Alignment.topCenter,
@@ -208,6 +255,7 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                     key: const ValueKey('chart'),
                     totalSpent: chartTotal,
                     data: chartData,
+                    currencySymbol: widget.currencySymbol,
                     onSectionTap: (id) => setState(() {
                       _selectedBucketId = _selectedBucketId == id ? null : id;
                       _currentFilter = FilterType.all;
@@ -217,6 +265,7 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                     key: const ValueKey('list'),
                     buckets: widget.buckets,
                     selectedBucketId: _selectedBucketId,
+                    currencySymbol: widget.currencySymbol,
                     onBucketSelected: (id) => setState(() {
                       _selectedBucketId = id;
                       _currentFilter = FilterType.all;
@@ -224,9 +273,9 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                   ),
           ),
         ),
-        const SizedBox(height: 10),
 
         // --- HISTORY HEADER ---
+        const SizedBox(height: 10),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
           child: Column(
@@ -263,7 +312,6 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                           ],
                         ),
                       ),
-
                     if (selectedBucket == null)
                       Text(
                         "History",
@@ -273,7 +321,6 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                           color: textColor,
                         ),
                       ),
-
                     if (selectedBucket != null)
                       Align(
                         alignment: Alignment.centerRight,
@@ -363,6 +410,8 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
                   color: selectedBucket.color,
                   isFixed: selectedBucket.isFixed,
                   showLabels: true,
+                  isFuture: widget.isFuture, // Pass flag here too
+                  height: 24,
                 ),
                 const SizedBox(height: 10),
               ],
@@ -377,6 +426,7 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
             transactions: displayedTransactions,
             buckets: widget.buckets,
             isDark: widget.isDark,
+            currencySymbol: widget.currencySymbol,
             onEdit: widget.onEditTransaction,
           ),
         ),
@@ -424,7 +474,7 @@ class _FinanceDashboardState extends State<FinanceDashboard> {
             ),
             const SizedBox(height: 4),
             Text(
-              "\$${amount.toStringAsFixed(0)}",
+              "${widget.currencySymbol}${amount.toStringAsFixed(0)}",
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.bold,

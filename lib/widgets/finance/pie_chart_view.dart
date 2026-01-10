@@ -1,8 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+// --- THIS CLASS WAS MISSING ---
 class ChartData {
-  final String id; // Added ID for filtering
+  final String id;
   final String name;
   final double amount;
   final Color color;
@@ -10,16 +11,19 @@ class ChartData {
 
   ChartData(this.id, this.name, this.amount, this.color, this.icon);
 }
+// ------------------------------
 
 class PieChartView extends StatelessWidget {
   final double totalSpent;
   final List<ChartData> data;
-  final Function(String) onSectionTap; // Callback for filtering
+  final String currencySymbol;
+  final Function(String) onSectionTap;
 
   const PieChartView({
     super.key,
     required this.totalSpent,
     required this.data,
+    required this.currencySymbol,
     required this.onSectionTap,
   });
 
@@ -60,7 +64,7 @@ class PieChartView extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        "\$${totalSpent.toInt()}",
+                        "$currencySymbol${totalSpent.toInt()}",
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
@@ -82,7 +86,7 @@ class PieChartView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // 2. The Legend (Clickable too)
+          // 2. The Legend
           Wrap(
             spacing: 16,
             runSpacing: 10,
@@ -130,26 +134,17 @@ class PieChartView extends StatelessWidget {
     );
   }
 
-  // Calculate which slice was tapped based on angle
   void _handleTap(TapUpDetails details, BuildContext context) {
     if (totalSpent == 0) return;
-
     final RenderBox box = context.findRenderObject() as RenderBox;
     final Offset localOffset = box.globalToLocal(details.globalPosition);
-    final Offset center = Offset(box.size.width / 2, 180 / 2); // 180 is height
-
-    // Calculate angle from center
+    final Offset center = Offset(box.size.width / 2, 180 / 2);
     final dx = localOffset.dx - center.dx;
     final dy = localOffset.dy - center.dy;
-
-    // atan2 returns -pi to +pi. We want 0 to 2pi starting from top (-pi/2)
     double angle = atan2(dy, dx);
-
-    // Adjust so 0 is at the top (12 o'clock)
     angle += pi / 2;
     if (angle < 0) angle += 2 * pi;
 
-    // Find the data segment that contains this angle
     double currentAngle = 0;
     for (var item in data) {
       final sweepAngle = (item.amount / totalSpent) * 2 * pi;
@@ -178,19 +173,15 @@ class _DonutChartPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = min(size.width / 2, size.height / 2);
     const strokeWidth = 20.0;
-
     final bgPaint = Paint()
       ..color = bgColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
-
     canvas.drawCircle(center, radius - strokeWidth / 2, bgPaint);
 
     if (total == 0) return;
 
-    // Start from -pi/2 (top)
     double startAngle = -pi / 2;
-
     for (var item in data) {
       final sweepAngle = (item.amount / total) * 2 * pi;
       final paint = Paint()
@@ -200,7 +191,6 @@ class _DonutChartPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round;
 
       if (sweepAngle > 0) {
-        // Draw slightly less than full sweep to leave a gap if multiple items
         final gap = data.length > 1 ? 0.05 : 0.0;
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),

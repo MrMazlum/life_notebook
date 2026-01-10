@@ -4,9 +4,11 @@ class BudgetProgressBar extends StatelessWidget {
   final double spent;
   final double limit;
   final Color color;
-  final bool isFixed; // True for Rent, False for Food
+  final bool isFixed;
   final bool showLabels;
-  final double? customIdeal; // NEW: Override the math for the Total Bar
+  final double? customIdeal;
+  final double height;
+  final bool isFuture; // <--- NEW PARAMETER
 
   const BudgetProgressBar({
     super.key,
@@ -15,7 +17,9 @@ class BudgetProgressBar extends StatelessWidget {
     required this.color,
     this.isFixed = false,
     this.showLabels = true,
-    this.customIdeal, // NEW
+    this.customIdeal,
+    this.height = 12,
+    this.isFuture = false, // <--- DEFAULT FALSE
   });
 
   @override
@@ -24,27 +28,33 @@ class BudgetProgressBar extends StatelessWidget {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // 1. Time Calculations
-    final now = DateTime.now();
-    final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
-    final dayProgress = now.day / daysInMonth;
+    // --- FIX LOGIC HERE ---
+    double dayProgress;
+    if (isFuture) {
+      dayProgress = 0.0; // Future: Month hasn't started
+    } else {
+      final now = DateTime.now();
+      final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+      dayProgress = (now.day / daysInMonth).clamp(0.0, 1.0);
+    }
+    // ---------------------
 
-    // 2. Money Calculations
     final spendProgress = (spent / limit).clamp(0.0, 1.0);
-
-    // SMART LOGIC: Use custom ideal if provided (for Total Bar), else calculate
     final idealSpend = customIdeal ?? (limit * dayProgress);
     final idealProgress = (idealSpend / limit).clamp(0.0, 1.0);
 
+    // Status Text Logic
     final diffAmount = spent - idealSpend;
     final diffPercent = (diffAmount / limit) * 100;
 
-    // 3. Status Logic
     String statusText;
     Color statusColor;
 
-    if (isFixed) {
-      // Fixed Logic (Rent)
+    if (isFuture) {
+      // Clean status for future
+      statusText = "Ready to start";
+      statusColor = Colors.grey;
+    } else if (isFixed) {
       if (spent >= limit) {
         statusText = "✅ Paid";
         statusColor = Colors.green;
@@ -53,7 +63,6 @@ class BudgetProgressBar extends StatelessWidget {
         statusColor = Colors.orange;
       }
     } else {
-      // Fluid Logic (Food) OR Mixed (Total)
       if (diffPercent > 5) {
         statusText = "⚠️ +${diffPercent.toInt()}% ahead";
         statusColor = Colors.redAccent;
@@ -69,44 +78,38 @@ class BudgetProgressBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // THE BAR STACK
         SizedBox(
-          height: 12,
+          height: height,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-
               return Stack(
                 alignment: Alignment.centerLeft,
                 children: [
-                  // A. Background
                   Container(
                     width: width,
                     decoration: BoxDecoration(
                       color: isDark
                           ? Colors.grey.shade800
                           : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(height / 2),
                     ),
                   ),
-
-                  // B. Actual Spending
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 500),
                     width: width * spendProgress,
                     decoration: BoxDecoration(
                       color: color,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(height / 2),
                     ),
                   ),
-
-                  // C. "Ideal" Line Marker (Show for Fluid or Mixed)
-                  if (!isFixed)
+                  // Hide white indicator if future
+                  if (!isFixed && !isFuture)
                     Positioned(
                       left: (width * idealProgress).clamp(0, width - 2),
                       child: Container(
                         width: 2,
-                        height: 12,
+                        height: height,
                         color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
@@ -115,8 +118,6 @@ class BudgetProgressBar extends StatelessWidget {
             },
           ),
         ),
-
-        // LABELS
         if (showLabels) ...[
           const SizedBox(height: 6),
           Row(

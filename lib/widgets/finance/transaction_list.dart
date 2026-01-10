@@ -6,6 +6,7 @@ class TransactionList extends StatelessWidget {
   final List<FinanceTransaction> transactions;
   final List<FinanceBucket> buckets;
   final bool isDark;
+  final String currencySymbol; // NEW
   final Function(FinanceTransaction) onEdit;
 
   const TransactionList({
@@ -13,6 +14,7 @@ class TransactionList extends StatelessWidget {
     required this.transactions,
     required this.buckets,
     required this.isDark,
+    required this.currencySymbol, // NEW
     required this.onEdit,
   });
 
@@ -101,16 +103,13 @@ class TransactionList extends StatelessWidget {
               ),
               Row(
                 children: [
-                  // FIX 3: RESTORED RED COLOR FOR EXPENSES
                   Text(
-                    "${tx.isExpense ? '-' : '+'}\$${tx.amount.toStringAsFixed(2)}",
+                    // UPDATED: Use currencySymbol variable
+                    "${tx.isExpense ? '-' : '+'}$currencySymbol${tx.amount.toStringAsFixed(2)}",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: tx.isExpense
-                          ? Colors
-                                .redAccent // Explicitly Red
-                          : Colors.green, // Explicitly Green
+                      color: tx.isExpense ? Colors.redAccent : Colors.green,
                     ),
                   ),
                   const SizedBox(width: 12),

@@ -4,11 +4,13 @@ import '../../models/finance_models.dart';
 class EditMonthlyBudgetDialog extends StatefulWidget {
   final List<FinanceBucket> buckets;
   final Function(String, double, String, VoidCallback) onUpdateLimit;
+  final String currencySymbol; // NEW
 
   const EditMonthlyBudgetDialog({
     super.key,
     required this.buckets,
     required this.onUpdateLimit,
+    required this.currencySymbol, // NEW
   });
 
   @override
@@ -73,7 +75,7 @@ class _EditMonthlyBudgetDialogState extends State<EditMonthlyBudgetDialog> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          "\$${bucket.limit.toStringAsFixed(0)}",
+                          "${widget.currencySymbol}${bucket.limit.toStringAsFixed(0)}", // UPDATED
                           style: TextStyle(color: textColor.withOpacity(0.7)),
                         ),
                         const SizedBox(width: 8),
@@ -103,7 +105,7 @@ class _EditMonthlyBudgetDialogState extends State<EditMonthlyBudgetDialog> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   Text(
-                    "\$${totalLimit.toStringAsFixed(0)}",
+                    "${widget.currencySymbol}${totalLimit.toStringAsFixed(0)}", // UPDATED
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

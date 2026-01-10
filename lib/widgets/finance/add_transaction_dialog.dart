@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <--- IMPORT ADDED
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/finance_models.dart';
 
 class AddTransactionDialog extends StatefulWidget {
   final List<FinanceBucket> buckets;
   final FinanceTransaction? transactionToEdit;
+  final String currencySymbol;
 
   const AddTransactionDialog({
     super.key,
     required this.buckets,
     this.transactionToEdit,
+    required this.currencySymbol,
   });
 
   @override
@@ -221,12 +223,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
     if (_amountController.text.isEmpty) return;
     if (_isExpense && _selectedBucketId == null) return;
 
-    // --- GET CURRENT USER ---
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("No user logged in!");
-      return;
-    }
+    if (user == null) return;
 
     String finalTitle = _titleController.text;
     if (_isExpense &&
@@ -247,7 +245,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
       'isExpense': _isExpense,
       'categoryId': _isExpense ? _selectedBucketId : 'income',
       'date': Timestamp.fromDate(_selectedDate),
-      'userId': user.uid, // <--- CHANGED FROM 'test_user' TO REAL ID
+      'userId': user.uid,
     };
 
     if (!_isExpense && _selectedIncomeCategory != null) {
@@ -405,7 +403,8 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
-                  prefixText: '\$ ',
+                  prefixText:
+                      '${widget.currencySymbol} ', // <--- CURRENCY SYMBOL
                   hintText: '0.00',
                   filled: true,
                   fillColor: isDark ? Colors.black26 : Colors.grey.shade100,
@@ -416,7 +415,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              // 4. Category
+              // 4. Category / Source
               if (_isExpense)
                 DropdownButtonFormField<String>(
                   initialValue: _selectedBucketId,
@@ -491,7 +490,7 @@ class _AddTransactionDialogState extends State<AddTransactionDialog> {
                   ),
                 ),
               const SizedBox(height: 12),
-              // 5. Title
+              // 5. Title / Subscription
               if (_isExpense && _showSubscriptionDropdown)
                 DropdownButtonFormField<Map<String, dynamic>>(
                   initialValue: _selectedSubscription,
