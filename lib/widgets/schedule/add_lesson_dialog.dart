@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // IMPORT ADDED
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/lesson.dart';
 
 class AddLessonDialog extends StatefulWidget {
@@ -8,7 +8,6 @@ class AddLessonDialog extends StatefulWidget {
   final Function(Lesson) onAddLesson;
   final Future<void> Function(String, String) onUpdateGlobal;
   final DateTime selectedDate;
-  // Optional parameters for Editing
   final Lesson? lessonToEdit;
   final Function(String)? onDelete;
 
@@ -39,7 +38,51 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   bool _isInstructorLocked = false;
   bool _isRecurring = true;
 
+  // Category State
+  String _selectedCategory = 'general';
+  Color _selectedColor = Colors.grey;
+
   final List<int> _durations = [30, 45, 60, 90, 120, 180, 240];
+
+  // Categories Definition
+  final List<Map<String, dynamic>> _categories = [
+    {
+      'id': 'gym',
+      'label': 'Gym',
+      'icon': Icons.fitness_center,
+      'color': Colors.deepOrange,
+    },
+    {
+      'id': 'food',
+      'label': 'Food',
+      'icon': Icons.restaurant,
+      'color': Colors.green,
+    },
+    {
+      'id': 'read',
+      'label': 'Read',
+      'icon': Icons.menu_book,
+      'color': Colors.blue,
+    },
+    {
+      'id': 'coffee',
+      'label': 'Coffee',
+      'icon': Icons.coffee,
+      'color': Colors.brown,
+    },
+    {
+      'id': 'work',
+      'label': 'Work',
+      'icon': Icons.work,
+      'color': Colors.blueGrey,
+    },
+    {
+      'id': 'general',
+      'label': 'Other',
+      'icon': Icons.event,
+      'color': Colors.grey,
+    },
+  ];
 
   @override
   void initState() {
@@ -52,8 +95,9 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     _descriptionController = TextEditingController(
       text: edit?.description ?? '',
     );
+    _courseNameController = TextEditingController(text: edit?.name ?? '');
 
-    // Format start time for the controller
+    // Format start time
     String initialTimeStr = '';
     if (edit != null) {
       final h = edit.startTimeInMinutes ~/ 60;
@@ -62,16 +106,21 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
     }
     _startTimeController = TextEditingController(text: initialTimeStr);
-    _courseNameController = TextEditingController(text: edit?.name ?? '');
 
-    // 2. Pre-fill State booleans
+    // 2. Pre-fill State
     if (edit != null) {
       _isLecture = edit.isLecture;
       _isRecurring = edit.isRecurring;
       _selectedDuration = edit.durationInMinutes;
+      _selectedCategory = edit.category;
+      _selectedColor = Color(edit.colorValue); // Restore color
+
       if (edit.instructor.isNotEmpty) {
         _isInstructorLocked = true;
       }
+    } else {
+      // Default for new task
+      _selectedColor = _categories.last['color'];
     }
   }
 
@@ -132,7 +181,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     }
   }
 
-  // Cancel Button logic included
+  // --- RESTORED: The "Update All?" Dialog ---
   Future<bool?> _showProfessionalConfirmDialog(
     BuildContext context,
     String course,
@@ -306,8 +355,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () =>
-                      Navigator.pop(ctx, null), // null means cancel
+                  onPressed: () => Navigator.pop(ctx, null),
                   child: Text(
                     "Cancel",
                     style: TextStyle(color: Colors.grey.shade500),
@@ -330,13 +378,10 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       return;
     }
 
-    // --- NEW: GET CURRENT USER ---
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("No user logged in!");
-      return;
-    }
+    if (user == null) return;
 
+    // --- 1. HANDLE COURSE NAME & INSTRUCTOR LOGIC ---
     String finalCourseName = _toTitleCase(_courseNameController.text.trim());
     final existingKey = widget.courseDatabase.keys.firstWhere(
       (k) => k.toLowerCase() == finalCourseName.toLowerCase(),
@@ -345,10 +390,9 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
     if (existingKey.isNotEmpty) finalCourseName = existingKey;
 
     String finalInstructor = _toTitleCase(_instructorController.text.trim());
-
     bool performGlobalUpdate = false;
 
-    // Check for professor change
+    // Only check instructor logic if it is a Lecture/Class
     if (existingKey.isNotEmpty && _isLecture) {
       final oldInstructor = widget.courseDatabase[existingKey]!;
       if (oldInstructor.isNotEmpty && oldInstructor != finalInstructor) {
@@ -358,28 +402,31 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           oldInstructor,
           finalInstructor,
         );
-
-        if (result == null) {
-          // User clicked Cancel, abort save
-          return;
-        }
+        if (result == null) return; // Cancelled
         performGlobalUpdate = result;
       }
     }
 
+    // Update local map for immediate feedback
     if (performGlobalUpdate) {
       widget.courseDatabase[finalCourseName] = finalInstructor;
     }
 
+    // --- 2. PREPARE DATA ---
     final parts = _startTimeController.text.split(':');
     final startMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-
     final dayName = DateFormat('EEEE').format(widget.selectedDate);
     final dateString = DateFormat('yyyy-MM-dd').format(widget.selectedDate);
 
+    // Determine Colors and Category
+    final finalColor = _isLecture
+        ? 0xFF7C4DFF
+        : _selectedColor.value; // Purple if Class, Custom if Task
+    final finalCat = _isLecture ? 'class' : _selectedCategory;
+
     final newLesson = Lesson(
       id: widget.lessonToEdit?.id,
-      userId: user.uid, // <--- CHANGED FROM 'test_user' to REAL ID
+      userId: user.uid,
       name: finalCourseName,
       room: _isLecture ? _roomController.text : '',
       instructor: _isLecture ? finalInstructor : '',
@@ -391,6 +438,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
       durationInMinutes: _selectedDuration,
       specificDate: _isRecurring ? '' : dateString,
       excludeDates: widget.lessonToEdit?.excludeDates ?? [],
+      category: finalCat, // Saved Category
+      colorValue: finalColor, // Saved Color
     );
 
     try {
@@ -408,8 +457,9 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.lessonToEdit != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).primaryColor;
-    final accentColor = isDark ? Colors.deepPurpleAccent : primaryColor;
+    final accentColor = isDark
+        ? Colors.deepPurpleAccent
+        : Theme.of(context).primaryColor;
     final dayName = DateFormat('EEEE').format(widget.selectedDate);
 
     return AlertDialog(
@@ -422,12 +472,12 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // --- TOGGLE ROW ---
             Row(
               children: [
                 Expanded(
@@ -435,25 +485,18 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     label: const Center(child: Text("🎓 Class")),
                     selected: _isLecture,
                     onSelected: (val) => setState(() => _isLecture = true),
-                    selectedColor: accentColor.withOpacity(0.3),
-                    backgroundColor: isDark
-                        ? Colors.white10
-                        : Colors.grey.shade200,
+                    selectedColor: Colors.deepPurpleAccent.withOpacity(0.3),
                     labelStyle: TextStyle(
-                      color: _isLecture
-                          ? (isDark ? Colors.white : accentColor)
-                          : (isDark ? Colors.white70 : Colors.black54),
-                      fontWeight: _isLecture
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                      color: _isLecture ? Colors.deepPurpleAccent : Colors.grey,
+                      fontWeight: FontWeight.bold,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
                     side: BorderSide(
                       color: _isLecture
-                          ? accentColor
-                          : (isDark ? Colors.white12 : Colors.grey.shade300),
+                          ? Colors.deepPurpleAccent
+                          : Colors.grey.withOpacity(0.3),
                     ),
                   ),
                 ),
@@ -463,40 +506,90 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                     label: const Center(child: Text("📝 Task")),
                     selected: !_isLecture,
                     onSelected: (val) => setState(() => _isLecture = false),
-                    selectedColor: accentColor.withOpacity(0.3),
-                    backgroundColor: isDark
-                        ? Colors.white10
-                        : Colors.grey.shade200,
+                    selectedColor: _selectedColor.withOpacity(0.3),
                     labelStyle: TextStyle(
-                      color: !_isLecture
-                          ? (isDark ? Colors.white : accentColor)
-                          : (isDark ? Colors.white70 : Colors.black54),
-                      fontWeight: !_isLecture
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                      color: !_isLecture ? _selectedColor : Colors.grey,
+                      fontWeight: FontWeight.bold,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
                     side: BorderSide(
                       color: !_isLecture
-                          ? accentColor
-                          : (isDark ? Colors.white12 : Colors.grey.shade300),
+                          ? _selectedColor
+                          : Colors.grey.withOpacity(0.3),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
+
+            // --- CATEGORY SELECTOR (Only for Task) ---
+            if (!_isLecture)
+              SizedBox(
+                height: 50,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final cat = _categories[index];
+                    final isSelected = _selectedCategory == cat['id'];
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCategory = cat['id'];
+                          _selectedColor = cat['color'];
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? cat['color']
+                              : (isDark ? Colors.black26 : Colors.grey[200]),
+                          borderRadius: BorderRadius.circular(20),
+                          border: isSelected
+                              ? Border.all(color: cat['color'], width: 2)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              cat['icon'],
+                              size: 18,
+                              color: isSelected ? Colors.white : Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              cat['label'],
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.grey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            if (!_isLecture) const SizedBox(height: 16),
+
+            // --- DAY DISPLAY ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               decoration: BoxDecoration(
                 color: isDark ? Colors.white10 : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: isDark ? Colors.white24 : Colors.grey.shade400,
-                ),
               ),
               child: Text(
                 dayName,
@@ -507,14 +600,15 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // --- COURSE NAME (Autocomplete) ---
             Autocomplete<String>(
               initialValue: TextEditingValue(
                 text: widget.lessonToEdit?.name ?? '',
               ),
               optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text == '') {
+                if (textEditingValue.text == '')
                   return const Iterable<String>.empty();
-                }
                 return widget.courseDatabase.keys.where(
                   (String option) => option.toLowerCase().contains(
                     textEditingValue.text.toLowerCase(),
@@ -535,8 +629,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                       focusNode: focusNode,
                       onChanged: _onCourseNameChanged,
                       decoration: InputDecoration(
-                        labelText: _isLecture ? 'Course Name' : 'Activity Name',
-                        hintText: 'e.g. Math or Gym',
+                        labelText: _isLecture ? 'Course Name' : 'Title',
                         border: const OutlineInputBorder(),
                         isDense: true,
                         suffixIcon: const Icon(
@@ -549,6 +642,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   },
             ),
             const SizedBox(height: 12),
+
+            // --- LECTURE FIELDS vs TASK FIELDS ---
             if (_isLecture) ...[
               TextField(
                 controller: _roomController,
@@ -593,6 +688,8 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ),
             ],
             const SizedBox(height: 12),
+
+            // --- TIME & DURATION ---
             Row(
               children: [
                 Expanded(
@@ -610,7 +707,7 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    initialValue: _selectedDuration,
+                    value: _selectedDuration,
                     items: _durations
                         .map(
                           (m) =>
@@ -628,34 +725,25 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
               ],
             ),
             const SizedBox(height: 12),
-            Theme(
-              data: Theme.of(context).copyWith(
-                checkboxTheme: CheckboxThemeData(
-                  side: BorderSide(
-                    color: isDark ? Colors.white70 : Colors.grey,
-                    width: 2,
-                  ),
-                  checkColor: WidgetStateProperty.all(Colors.white),
+
+            // --- RECURRING & DELETE ---
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                "Recurring Event",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.black87,
                 ),
               ),
-              child: CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  "Recurring Event",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                subtitle: Text(
-                  "Repeat every week",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                value: _isRecurring,
-                activeColor: accentColor,
-                onChanged: (val) => setState(() => _isRecurring = val ?? true),
-                controlAffinity: ListTileControlAffinity.leading,
+              subtitle: Text(
+                "Repeat every week",
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
+              value: _isRecurring,
+              activeColor: accentColor,
+              onChanged: (val) => setState(() => _isRecurring = val ?? true),
+              controlAffinity: ListTileControlAffinity.leading,
             ),
             if (isEditing && widget.onDelete != null) ...[
               const SizedBox(height: 20),
@@ -671,12 +759,6 @@ class _AddLessonDialogState extends State<AddLessonDialog> {
                   style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 16,
                   ),
                 ),
               ),

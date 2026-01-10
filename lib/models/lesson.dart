@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 class Lesson {
   final String? id;
@@ -9,13 +10,15 @@ class Lesson {
   final String description;
   final bool isLecture;
   final bool isRecurring;
-  final String dayOfWeek; // e.g., "Monday"
+  final String dayOfWeek;
   final int startTimeInMinutes;
   final int durationInMinutes;
+  final List<String> excludeDates;
+  final String specificDate;
 
   // NEW FIELDS
-  final List<String> excludeDates; // Dates to skip: ["2026-01-04"]
-  final String specificDate; // If NOT recurring: "2026-01-04"
+  final String category; // e.g. "gym", "food", "work", "class"
+  final int colorValue; // Store color as int (ARGB)
 
   Lesson({
     this.id,
@@ -31,9 +34,10 @@ class Lesson {
     required this.durationInMinutes,
     this.excludeDates = const [],
     this.specificDate = '',
+    this.category = 'general',
+    this.colorValue = 0xFF9E9E9E, // Default Grey
   });
 
-  // Helpers
   int get endTimeInMinutes => startTimeInMinutes + durationInMinutes;
 
   String get startTimeString {
@@ -61,8 +65,10 @@ class Lesson {
       'dayOfWeek': dayOfWeek,
       'startTimeInMinutes': startTimeInMinutes,
       'durationInMinutes': durationInMinutes,
-      'excludeDates': excludeDates, // Save to DB
-      'specificDate': specificDate, // Save to DB
+      'excludeDates': excludeDates,
+      'specificDate': specificDate,
+      'category': category,
+      'colorValue': colorValue,
     };
   }
 
@@ -80,9 +86,10 @@ class Lesson {
       dayOfWeek: data['dayOfWeek'] ?? 'Monday',
       startTimeInMinutes: data['startTimeInMinutes'] ?? 0,
       durationInMinutes: data['durationInMinutes'] ?? 60,
-      // Load from DB (safely handle lists)
       excludeDates: List<String>.from(data['excludeDates'] ?? []),
       specificDate: data['specificDate'] ?? '',
+      category: data['category'] ?? 'general',
+      colorValue: data['colorValue'] ?? 0xFF9E9E9E,
     );
   }
 }

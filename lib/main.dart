@@ -9,7 +9,7 @@ import 'pages/health_page.dart';
 import 'pages/book_page.dart';
 import 'pages/finance_page.dart';
 import 'pages/schedule_page.dart';
-import 'pages/dashboard_page.dart';
+import 'pages/dashboard_page.dart'; // Standard import now
 import 'pages/login_page.dart';
 
 void main() async {
@@ -28,7 +28,7 @@ final ValueNotifier<int> _pageIndexNotifier = ValueNotifier(2);
 const List<Color> globalPageColors = [
   Colors.deepOrange, // 0: Health
   Colors.blue, // 1: Books
-  Colors.teal, // 2: Home
+  Color(0xFF424242), // 2: Home (Dark Gray)
   Colors.green, // 3: Finance
   Colors.deepPurple, // 4: Schedule
 ];
@@ -47,7 +47,6 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
     _loadUserTheme();
   }
 
-  // --- Load Theme from Firestore ---
   Future<void> _loadUserTheme() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -78,19 +77,15 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
           debugShowCheckedModeBanner: false,
           title: 'Life Notebook',
 
-          // 1. LIGHT THEME
+          // LIGHT THEME
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.teal,
-              brightness: Brightness.light,
-            ),
             useMaterial3: true,
+            brightness: Brightness.light,
             scaffoldBackgroundColor: const Color(0xFFF5F5F5),
             appBarTheme: const AppBarTheme(
               foregroundColor: Colors.white,
               elevation: 0,
             ),
-            // Default popup menu style for light mode
             popupMenuTheme: PopupMenuThemeData(
               color: Colors.white,
               shape: RoundedRectangleBorder(
@@ -100,21 +95,16 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
             ),
           ),
 
-          // 2. DARK THEME
+          // DARK THEME
           darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.teal,
-              brightness: Brightness.dark,
-              surface: const Color(0xFF1E1E1E),
-            ),
             useMaterial3: true,
+            brightness: Brightness.dark,
             scaffoldBackgroundColor: const Color(0xFF121212),
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF1E1E1E),
               foregroundColor: Colors.white,
               elevation: 0,
             ),
-            // Default popup menu style for dark mode
             popupMenuTheme: PopupMenuThemeData(
               color: const Color(0xFF1E1E1E),
               shape: RoundedRectangleBorder(
@@ -125,8 +115,6 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
           ),
 
           themeMode: currentMode,
-
-          // --- AUTH GATE ---
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
@@ -155,13 +143,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // We declare the controller here but initialize it in initState
   late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    // Initialize with the current global index so it doesn't reset to dashboard (2)
     _pageController = PageController(initialPage: _pageIndexNotifier.value);
   }
 
@@ -171,12 +157,13 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // This function switches the tab
   void _onItemTapped(int index) {
     _pageIndexNotifier.value = index;
     _pageController.animateToPage(
       index,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOutCubic,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -184,11 +171,9 @@ class _HomePageState extends State<HomePage> {
     _pageIndexNotifier.value = index;
   }
 
-  // --- Save Theme to Firestore ---
   void _toggleTheme(bool isCurrentlyDark) {
     final newMode = isCurrentlyDark ? ThemeMode.light : ThemeMode.dark;
     _themeNotifier.value = newMode;
-
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -197,19 +182,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // --- Sign Out Function ---
   void _signOut() async {
     await FirebaseAuth.instance.signOut();
   }
 
-  // Your actual pages
-  static const List<Widget> _pages = <Widget>[
-    HealthPage(),
-    BookPage(),
-    DashboardPage(),
-    FinancePage(),
-    SchedulePage(),
-  ];
+  // Helper to build the pages list dynamically so we can pass the function
+  List<Widget> _getPages() {
+    return [
+      const HealthPage(),
+      const BookPage(),
+      // We pass the function here so the dashboard buttons work!
+      DashboardPage(onNavigate: _onItemTapped),
+      const FinancePage(),
+      const SchedulePage(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -221,129 +208,60 @@ class _HomePageState extends State<HomePage> {
         return ValueListenableBuilder<int>(
           valueListenable: _pageIndexNotifier,
           builder: (context, int currentIndex, _) {
-            final Color activeColor = globalPageColors[currentIndex];
+            // Determine active color for center button based on theme
+            final Color centerActiveColor = isDark
+                ? Colors.grey[600]!
+                : const Color(0xFF424242);
+
+            Color appBarColor;
+            if (currentIndex == 2) {
+              appBarColor = isDark
+                  ? const Color(0xFF1E1E1E)
+                  : const Color(0xFF424242);
+            } else {
+              appBarColor = isDark
+                  ? const Color(0xFF1E1E1E)
+                  : globalPageColors[currentIndex];
+            }
 
             return Scaffold(
               appBar: AppBar(
-                backgroundColor: isDark ? const Color(0xFF1E1E1E) : activeColor,
-                title: Text(
+                backgroundColor: appBarColor,
+                title: const Text(
                   'Life Notebook',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: isDark ? activeColor : Colors.white,
+                    color: Colors.white,
                   ),
                 ),
                 centerTitle: true,
-                iconTheme: IconThemeData(
-                  color: isDark ? activeColor : Colors.white,
-                ),
-
-                // === NEW STYLED SETTINGS MENU ===
-                leading: Theme(
-                  // Override specific theme data just for this popup to ensure it matches the cards
-                  data: Theme.of(context).copyWith(
-                    popupMenuTheme: PopupMenuThemeData(
-                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: isDark
-                            ? BorderSide(color: Colors.grey.withOpacity(0.1))
-                            : BorderSide.none,
-                      ),
-                      elevation: 10,
+                iconTheme: const IconThemeData(color: Colors.white),
+                leading: PopupMenuButton<String>(
+                  icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                  onSelected: (String value) {
+                    if (value == 'theme') _toggleTheme(isDark);
+                    if (value == 'logout') _signOut();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'theme',
+                      child: Text(isDark ? "Light Mode" : "Dark Mode"),
                     ),
-                  ),
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(Icons.settings_rounded),
-                    tooltip: 'Settings',
-                    offset: const Offset(
-                      10,
-                      50,
-                    ), // Shifts menu slightly for better placement
-                    onSelected: (String value) {
-                      if (value == 'theme') {
-                        _toggleTheme(isDark);
-                      } else if (value == 'logout') {
-                        _signOut();
-                      }
-                    },
-                    itemBuilder: (BuildContext context) =>
-                        <PopupMenuEntry<String>>[
-                          // 1. Theme Toggle
-                          PopupMenuItem<String>(
-                            value: 'theme',
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.grey[800]
-                                        : Colors.grey[200],
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isDark
-                                        ? Icons.light_mode_rounded
-                                        : Icons.dark_mode_rounded,
-                                    color: isDark
-                                        ? Colors.yellow
-                                        : Colors.grey[800],
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  isDark ? 'Light Mode' : 'Dark Mode',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const PopupMenuDivider(),
-
-                          // 2. Log Out
-                          PopupMenuItem<String>(
-                            value: 'logout',
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.logout_rounded,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Log Out',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                  ),
+                    const PopupMenuItem(
+                      value: 'logout',
+                      child: Text(
+                        "Log Out",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
                 ),
-
-                actions: [], // Cleared old actions
               ),
 
               body: PageView(
                 controller: _pageController,
                 onPageChanged: _onPageChanged,
-                children: _pages,
+                children: _getPages(), // Using our helper function
               ),
 
               bottomNavigationBar: BottomAppBar(
@@ -355,49 +273,71 @@ class _HomePageState extends State<HomePage> {
                   children: <Widget>[
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.favorite_rounded,
-                        index: 0,
-                        label: 'Health',
-                        activeColor: activeColor,
-                        currentIndex: currentIndex,
+                        Icons.favorite_rounded,
+                        0,
+                        'Health',
+                        Colors.deepOrange,
+                        currentIndex,
                       ),
                     ),
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.menu_book_rounded,
-                        index: 1,
-                        label: 'Books',
-                        activeColor: activeColor,
-                        currentIndex: currentIndex,
+                        Icons.menu_book_rounded,
+                        1,
+                        'Books',
+                        Colors.blue,
+                        currentIndex,
                       ),
                     ),
 
+                    // --- CENTER BUTTON ---
                     Expanded(
                       child: Center(
-                        child: _buildCenterHomeButton(
-                          currentIndex: currentIndex,
-                          activeColor: activeColor,
-                          isDark: isDark,
+                        child: GestureDetector(
+                          onTap: () => _onItemTapped(2),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: currentIndex == 2
+                                  ? centerActiveColor
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                              border: currentIndex == 2
+                                  ? null
+                                  : Border.all(
+                                      color: Colors.grey.withOpacity(0.5),
+                                      width: 2,
+                                    ),
+                            ),
+                            child: Icon(
+                              Icons.home_rounded,
+                              color: currentIndex == 2
+                                  ? Colors.white
+                                  : Colors.grey,
+                              size: 30,
+                            ),
+                          ),
                         ),
                       ),
                     ),
 
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.account_balance_wallet_rounded,
-                        index: 3,
-                        label: 'Finance',
-                        activeColor: activeColor,
-                        currentIndex: currentIndex,
+                        Icons.account_balance_wallet_rounded,
+                        3,
+                        'Finance',
+                        Colors.green,
+                        currentIndex,
                       ),
                     ),
                     Expanded(
                       child: _buildNavButton(
-                        icon: Icons.calendar_month_rounded,
-                        index: 4,
-                        label: 'Schedule',
-                        activeColor: activeColor,
-                        currentIndex: currentIndex,
+                        Icons.calendar_month_rounded,
+                        4,
+                        'Schedule',
+                        Colors.deepPurple,
+                        currentIndex,
                       ),
                     ),
                   ],
@@ -410,68 +350,31 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildNavButton({
-    required IconData icon,
-    required int index,
-    required String label,
-    required Color activeColor,
-    required int currentIndex,
-  }) {
+  Widget _buildNavButton(
+    IconData icon,
+    int index,
+    String label,
+    Color color,
+    int currentIndex,
+  ) {
     final bool isSelected = currentIndex == index;
-    final Color inactiveColor = Colors.grey;
-
     return InkWell(
       onTap: () => _onItemTapped(index),
       borderRadius: BorderRadius.circular(50),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? activeColor : inactiveColor,
-              size: 26,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: isSelected ? color : Colors.grey, size: 26),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? color : Colors.grey,
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCenterHomeButton({
-    required int currentIndex,
-    required Color activeColor,
-    required bool isDark,
-  }) {
-    final bool isSelected = currentIndex == 2;
-    return GestureDetector(
-      onTap: () => _onItemTapped(2),
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: isSelected ? activeColor : Colors.transparent,
-          shape: BoxShape.circle,
-          border: isSelected
-              ? null
-              : Border.all(color: Colors.grey.withOpacity(0.5), width: 2),
-        ),
-        child: Icon(
-          Icons.home_rounded,
-          color: isSelected ? Colors.white : Colors.grey,
-          size: 30,
-        ),
+          ),
+        ],
       ),
     );
   }
