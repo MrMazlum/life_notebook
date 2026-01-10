@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../models/health_model.dart';
 import 'activity/exercise_models.dart';
-import 'activity/routine_manager.dart'; // Reuse for routine selection
-import 'activity/routine_editor.dart'; // Reuse for exercise search
-import 'activity/set_editor.dart'; // Reuse for set editing
+import 'activity/routine_manager.dart';
+import 'activity/routine_editor.dart';
+import 'activity/set_editor.dart';
 
 class WorkoutPlanView extends StatefulWidget {
   final HealthDailyLog log;
+  final List<String> availableRoutines; // NEW: Accept the list
   final Function(String) onRoutineChanged;
   final Function() onLogUpdated;
 
   const WorkoutPlanView({
     super.key,
     required this.log,
+    required this.availableRoutines, // NEW
     required this.onRoutineChanged,
     required this.onLogUpdated,
   });
@@ -26,7 +28,6 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final accentColor = Colors.deepOrange;
 
     final hasRoutine = widget.log.workoutName != null;
@@ -93,7 +94,7 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
 
           const SizedBox(height: 20),
 
-          // 2. EXERCISE LIST (Full Page)
+          // 2. EXERCISE LIST
           Expanded(
             child: exercises.isEmpty
                 ? _buildEmptyState(isDark)
@@ -143,15 +144,6 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
         border: Border.all(
           color: isDark ? Colors.transparent : Colors.grey.shade100,
         ),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -200,7 +192,6 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
                 widget.onLogUpdated();
               },
             ),
-            // Drag handle implied by ReorderableListView, but we can add an icon if we want
             const Icon(Icons.drag_handle_rounded, color: Colors.grey, size: 20),
           ],
         ),
@@ -237,8 +228,6 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
     );
   }
 
-  // --- HELPERS (Reusing existing sheets) ---
-
   void _showRoutineManager(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -256,10 +245,9 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
         expand: false,
         builder: (_, scrollController) => RoutineManagerSheet(
           selectedRoutine: widget.log.workoutName,
+          availableRoutines: widget.availableRoutines, // PASSED DOWN!
           onSelected: (name) {
             widget.onRoutineChanged(name);
-
-            // Auto-populate logic (Simple version for now)
             if (widget.log.workoutLog.isEmpty) {
               widget.log.workoutLog = _generateDefaultExercises(name);
             }
@@ -310,28 +298,18 @@ class _WorkoutPlanViewState extends State<WorkoutPlanView> {
   }
 
   List<ExerciseDetail> _generateDefaultExercises(String routineName) {
-    // Basic templates to get started quickly
     if (routineName.contains("Push")) {
       return [
         ExerciseDetail(name: "Bench Press"),
         ExerciseDetail(name: "Overhead Press"),
-        ExerciseDetail(name: "Incline Dumbbell Press"),
-        ExerciseDetail(name: "Tricep Pushdown"),
       ];
     } else if (routineName.contains("Pull")) {
       return [
         ExerciseDetail(name: "Deadlift"),
         ExerciseDetail(name: "Pull Ups"),
-        ExerciseDetail(name: "Barbell Row"),
-        ExerciseDetail(name: "Bicep Curl"),
       ];
     } else {
-      return [
-        ExerciseDetail(name: "Squat"),
-        ExerciseDetail(name: "Leg Press"),
-        ExerciseDetail(name: "Leg Extension"),
-        ExerciseDetail(name: "Calf Raise"),
-      ];
+      return [ExerciseDetail(name: "Squat"), ExerciseDetail(name: "Leg Press")];
     }
   }
 }

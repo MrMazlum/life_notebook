@@ -18,11 +18,13 @@ class WorkoutLoggerSheet extends StatefulWidget {
 }
 
 class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
+  // These represent the actual performed sets
   late List<SetDetail> _loggedSets;
 
   @override
   void initState() {
     super.initState();
+    // Initialize with empty sets (0 reps/0 weight) or copy defaults if we passed them
     _loggedSets = List.generate(
       widget.targetSetCount,
       (index) => SetDetail(reps: 0, weight: 0.0),
@@ -36,7 +38,6 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
-    // FIX: Force height to 85% of screen so it doesn't get cut off
     final height = MediaQuery.of(context).size.height * 0.85;
 
     return Container(
@@ -48,7 +49,7 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
       ),
       child: Column(
         children: [
-          // HANDLE
+          // Handle
           Center(
             child: Container(
               width: 40,
@@ -61,7 +62,7 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
             ),
           ),
 
-          // HEADER
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -78,6 +79,7 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
               ),
               TextButton(
                 onPressed: () {
+                  // Finish and mark exercise as complete
                   widget.onComplete(true);
                   Navigator.pop(context);
                 },
@@ -94,42 +96,20 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
           ),
           const SizedBox(height: 20),
 
-          // COLUMN TITLES
+          // Labels
           Row(
             children: [
-              const SizedBox(width: 40), // Space for Set # badge
+              const SizedBox(width: 40),
               const Spacer(),
-              SizedBox(
-                width: 80,
-                child: Center(
-                  child: Text(
-                    "kg",
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+              _label("kg"),
               const SizedBox(width: 20),
-              SizedBox(
-                width: 80,
-                child: Center(
-                  child: Text(
-                    "Reps",
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 40), // Space for delete icon
+              _label("Reps"),
+              const SizedBox(width: 40),
             ],
           ),
           const SizedBox(height: 10),
 
-          // SCROLLABLE LIST
+          // List
           Expanded(
             child: ListView.separated(
               itemCount: _loggedSets.length,
@@ -139,7 +119,7 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
             ),
           ),
 
-          // ADD SET BUTTON (Pinned to bottom of visible area)
+          // Add Set
           Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -172,10 +152,24 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
     );
   }
 
+  Widget _label(String txt) {
+    return SizedBox(
+      width: 80,
+      child: Center(
+        child: Text(
+          txt,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLogRows(int setNum, SetDetail set, bool isDark) {
     return Row(
       children: [
-        // Set Badge
         Container(
           width: 40,
           height: 40,
@@ -194,11 +188,11 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
           ),
         ),
         const Spacer(),
-        // Weight
-        _buildInput(isDark, (val) => set.weight = double.tryParse(val) ?? 0),
+        // Weight Input
+        _input(isDark, (val) => set.weight = double.tryParse(val) ?? 0),
         const SizedBox(width: 20),
-        // Reps
-        _buildInput(isDark, (val) => set.reps = int.tryParse(val) ?? 0),
+        // Reps Input
+        _input(isDark, (val) => set.reps = int.tryParse(val) ?? 0),
         // Delete
         SizedBox(
           width: 40,
@@ -217,11 +211,11 @@ class _WorkoutLoggerSheetState extends State<WorkoutLoggerSheet> {
     );
   }
 
-  Widget _buildInput(bool isDark, Function(String) onChange) {
+  Widget _input(bool isDark, Function(String) onChange) {
     return SizedBox(
       width: 80,
       child: TextField(
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
         style: TextStyle(
           fontWeight: FontWeight.bold,

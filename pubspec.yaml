@@ -11,38 +11,31 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  firebase_core: ^4.3.0
-  cloud_firestore: ^6.1.1
-  firebase_auth: ^6.1.3
-  intl: ^0.20.2
-  permission_handler: ^12.0.1
-  pedometer: ^4.1.1
-  shared_preferences: ^2.5.4
+  firebase_core: ^3.1.0 
+  cloud_firestore: ^5.0.1
+  firebase_auth: ^5.1.0
+  intl: ^0.19.0
+  shared_preferences: ^2.2.3
   google_sign_in: ^6.2.1
+  http: ^1.2.0  # Added for Book Search functionality
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  # ADDED: Package to generate app icons automatically
+  flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
 
-  # Ensure your assets folder contains:
-  # 1. tortul_logo.jpeg
-  # 2. google_logo.png
   assets:
     - assets/
 
 # --- APP ICON CONFIGURATION ---
-# This tells the tool which image to use for your app icon.
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/tortul_logo.jpeg" 
   min_sdk_android: 21 
-  # If your logo has a white background, setting this to true helps on Android
   adaptive_icon_background: "#FFFFFF" 
   adaptive_icon_foreground: "assets/tortul_logo.jpeg"

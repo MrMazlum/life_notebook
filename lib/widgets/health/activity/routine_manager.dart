@@ -1,15 +1,17 @@
-// lib/widgets/health/activity/routine_manager.dart
-
 import 'package:flutter/material.dart';
 import 'routine_editor.dart';
+// IMPORT EXERCISE MODELS FOR THE LIST TYPE
+import 'exercise_models.dart';
 
 class RoutineManagerSheet extends StatefulWidget {
   final String? selectedRoutine;
+  final List<String> availableRoutines;
   final Function(String) onSelected;
 
   const RoutineManagerSheet({
     super.key,
     required this.selectedRoutine,
+    required this.availableRoutines,
     required this.onSelected,
   });
 
@@ -18,18 +20,22 @@ class RoutineManagerSheet extends StatefulWidget {
 }
 
 class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
-  final List<String> _userRoutines = [
-    "Push Day A",
-    "Pull Day A",
-    "Legs",
-    "Full Body",
-  ];
+  late List<String> _displayRoutines;
   String? _tempSelected;
 
   @override
   void initState() {
     super.initState();
     _tempSelected = widget.selectedRoutine;
+
+    // Default system routines
+    final defaults = ["Push Day A", "Pull Day A", "Legs", "Full Body"];
+
+    // Combine defaults + user custom routines
+    _displayRoutines = [...defaults, ...widget.availableRoutines];
+
+    // Remove duplicates
+    _displayRoutines = _displayRoutines.toSet().toList();
   }
 
   @override
@@ -41,7 +47,6 @@ class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          // HEADER
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -61,10 +66,9 @@ class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
                       color: Colors.deepOrange,
                       size: 28,
                     ),
-                    onPressed: () => _openEditor(context, null), // Create New
+                    onPressed: () => _openEditor(context, null),
                   ),
                   const SizedBox(width: 8),
-                  // CONFIRM BUTTON
                   IconButton(
                     icon: const Icon(
                       Icons.check_circle,
@@ -84,14 +88,12 @@ class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
           const SizedBox(height: 10),
           const Divider(),
           const SizedBox(height: 10),
-
-          // LIST
           Expanded(
             child: ListView.separated(
-              itemCount: _userRoutines.length,
+              itemCount: _displayRoutines.length,
               separatorBuilder: (ctx, i) => const SizedBox(height: 12),
               itemBuilder: (ctx, index) {
-                final routine = _userRoutines[index];
+                final routine = _displayRoutines[index];
                 final isSelected = routine == _tempSelected;
 
                 return GestureDetector(
@@ -162,13 +164,15 @@ class _RoutineManagerSheetState extends State<RoutineManagerSheet> {
           : Colors.white,
       builder: (ctx) => RoutineEditorSheet(
         initialName: routineName,
-        onSave: (newName) {
+        // --- FIXED CALLBACK HERE ---
+        onSave: (newName, newExercises) {
           setState(() {
             if (routineName == null) {
-              _userRoutines.add(newName);
+              _displayRoutines.add(newName);
             }
-            // In real app, handle rename logic here
           });
+          // For now, we rely on selection to trigger saving in HealthPage
+          widget.onSelected(newName);
           Navigator.pop(ctx);
         },
       ),

@@ -6,24 +6,24 @@ import 'exercise_models.dart';
 
 class ActivityCard extends StatefulWidget {
   final HealthDailyLog log;
+  final List<String> availableRoutines; // NEW
   final Function(String?) onRoutineChanged;
   final Function(bool) onWorkoutToggle;
   final Function(int) onStepsChanged;
   final Function(double) onWeightChanged;
   final Function() onExerciseUpdated;
-
-  // NEW: Flag to change UI behavior for future dates
   final bool isPlanningMode;
 
   const ActivityCard({
     super.key,
     required this.log,
+    required this.availableRoutines, // NEW
     required this.onRoutineChanged,
     required this.onWorkoutToggle,
     required this.onStepsChanged,
     required this.onWeightChanged,
     required this.onExerciseUpdated,
-    this.isPlanningMode = false, // Default is false (Active mode)
+    this.isPlanningMode = false,
   });
 
   @override
@@ -68,6 +68,10 @@ class _ActivityCardState extends State<ActivityCard> {
                 : _buildPlayerState(context)),
     );
   }
+
+  // ... [Keep _buildSelectorState, _buildLoadingOrEmptyState, _buildPlayerState, _showLogger EXACTLY AS BEFORE] ...
+
+  // Only pasting the changed methods:
 
   Widget _buildSelectorState(BuildContext context) {
     return GestureDetector(
@@ -128,6 +132,8 @@ class _ActivityCardState extends State<ActivityCard> {
       ),
     );
   }
+
+  // Keep _buildPlayerState and _showLogger the same, just update _showRoutineManager
 
   Widget _buildPlayerState(BuildContext context) {
     final currentExercise = widget.log.workoutLog[_currentExerciseIndex];
@@ -328,6 +334,8 @@ class _ActivityCardState extends State<ActivityCard> {
         expand: false,
         builder: (_, scrollController) => RoutineManagerSheet(
           selectedRoutine: widget.log.workoutName,
+          // NEW: Pass custom routines from ActivityCard
+          availableRoutines: widget.availableRoutines,
           onSelected: (routineName) {
             widget.onRoutineChanged(routineName);
             final List<ExerciseDetail> newExercises =
@@ -347,39 +355,29 @@ class _ActivityCardState extends State<ActivityCard> {
   }
 
   List<ExerciseDetail> _generateExercisesForRoutine(String routineName) {
+    // NOTE: In a full app, you would fetch the specific exercises for the "Custom Routine" from Firestore here.
+    // For now, it defaults to a template, or empty if it's a new custom name.
     if (routineName.contains("Push")) {
       return [
-        ExerciseDetail(
-          name: "Bench Press",
-          sets: [SetDetail(), SetDetail(), SetDetail()],
-        ),
-        ExerciseDetail(name: "Incline Fly", sets: [SetDetail(), SetDetail()]),
-        ExerciseDetail(
-          name: "Tricep Pushdown",
-          sets: [SetDetail(), SetDetail(), SetDetail()],
-        ),
+        ExerciseDetail(name: "Bench Press"),
+        ExerciseDetail(name: "Incline Fly"),
+        ExerciseDetail(name: "Tricep Pushdown"),
       ];
     } else if (routineName.contains("Pull")) {
       return [
-        ExerciseDetail(name: "Pull Ups", sets: [SetDetail(), SetDetail()]),
-        ExerciseDetail(
-          name: "Barbell Row",
-          sets: [SetDetail(), SetDetail(), SetDetail()],
-        ),
-        ExerciseDetail(name: "Bicep Curl", sets: [SetDetail(), SetDetail()]),
+        ExerciseDetail(name: "Pull Ups"),
+        ExerciseDetail(name: "Barbell Row"),
+        ExerciseDetail(name: "Bicep Curl"),
+      ];
+    } else if (routineName.contains("Legs")) {
+      return [
+        ExerciseDetail(name: "Squat"),
+        ExerciseDetail(name: "Leg Press"),
+        ExerciseDetail(name: "Calf Raise"),
       ];
     } else {
-      return [
-        ExerciseDetail(
-          name: "Squat",
-          sets: [SetDetail(), SetDetail(), SetDetail()],
-        ),
-        ExerciseDetail(name: "Leg Press", sets: [SetDetail(), SetDetail()]),
-        ExerciseDetail(
-          name: "Calf Raise",
-          sets: [SetDetail(), SetDetail(), SetDetail()],
-        ),
-      ];
+      // Default / Empty for custom
+      return [ExerciseDetail(name: "New Exercise 1")];
     }
   }
 }

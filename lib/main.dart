@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -121,7 +122,7 @@ class _LifeNotebookAppState extends State<LifeNotebookApp> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
-                  backgroundColor: Colors.black, // Dark loading screen
+                  backgroundColor: Colors.black,
                   body: Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   ),
@@ -205,15 +206,10 @@ class _HomePageState extends State<HomePage> {
             "You can always change this later from the Settings menu.",
             style: TextStyle(color: Colors.white70, height: 1.5),
           ),
-
-          // WE REMOVE DEFAULT ACTIONS PADDING TO HANDLE IT OURSELVES
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-
           actions: [
-            // --- CUSTOM ROW FOR IDENTICAL BUTTONS ---
             Row(
               children: [
-                // BUTTON 1: USE LIGHT MODE (Bordered)
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
@@ -225,9 +221,7 @@ class _HomePageState extends State<HomePage> {
                     },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white70,
-                      side: const BorderSide(
-                        color: Colors.white70,
-                      ), // Frame Color
+                      side: const BorderSide(color: Colors.white70),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -236,9 +230,7 @@ class _HomePageState extends State<HomePage> {
                     child: const Text("Use Light Mode"),
                   ),
                 ),
-
-                const SizedBox(width: 12), // Spacing between buttons
-                // BUTTON 2: KEEP DARK MODE (Filled)
+                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
@@ -338,13 +330,16 @@ class _HomePageState extends State<HomePage> {
 
             return Scaffold(
               appBar: AppBar(
+                // This keeps the custom font style you requested
+                toolbarHeight: 80,
                 backgroundColor: appBarColor,
                 title: const Text(
                   'T O R T U L',
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontSize: 32, // Large
+                    fontWeight: FontWeight.w900, // Extra Bold
                     color: Colors.white,
-                    letterSpacing: 2.0,
+                    letterSpacing: 8.0, // Wide spacing matching login
                   ),
                 ),
                 centerTitle: true,
@@ -370,13 +365,11 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-
               body: PageView(
                 controller: _pageController,
                 onPageChanged: _onPageChanged,
                 children: _getPages(),
               ),
-
               bottomNavigationBar: BottomAppBar(
                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 elevation: 20,
@@ -402,7 +395,6 @@ class _HomePageState extends State<HomePage> {
                         currentIndex,
                       ),
                     ),
-
                     Expanded(
                       child: Center(
                         child: GestureDetector(
@@ -433,7 +425,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-
                     Expanded(
                       child: _buildNavButton(
                         Icons.account_balance_wallet_rounded,

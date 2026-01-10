@@ -4,7 +4,8 @@ import 'set_editor.dart';
 
 class RoutineEditorSheet extends StatefulWidget {
   final String? initialName;
-  final Function(String) onSave;
+  // Callback now returns Name AND the Exercises for that routine
+  final Function(String, List<ExerciseDetail>) onSave;
 
   const RoutineEditorSheet({super.key, this.initialName, required this.onSave});
 
@@ -20,18 +21,10 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.initialName ?? "");
-    // Mock data for demo if editing
-    if (widget.initialName != null && widget.initialName!.isNotEmpty) {
-      _exercises.add(
-        ExerciseDetail(
-          name: "Bench Press",
-          sets: [
-            SetDetail(weight: 60, reps: 12),
-            SetDetail(weight: 65, reps: 10),
-          ],
-        ),
-      );
-    }
+
+    // If we are editing an existing routine, in a real DB app we would fetch
+    // the existing exercises for this routine here.
+    // For this version, if it's new, we start empty.
   }
 
   @override
@@ -41,8 +34,8 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
     final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final inputColor = isDark ? Colors.black26 : Colors.grey.shade100;
 
-    // 1. FORCE HEIGHT (85% of screen)
-    final height = MediaQuery.of(context).size.height * 0.85;
+    // Force height to 90% of screen for full editor feel
+    final height = MediaQuery.of(context).size.height * 0.90;
 
     return Container(
       height: height,
@@ -54,7 +47,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // HANDLE BAR
+          // Drag Handle
           Center(
             child: Container(
               width: 40,
@@ -67,12 +60,12 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
             ),
           ),
 
-          // HEADER
+          // Header with Save Button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Edit Routine",
+                widget.initialName == null ? "New Routine" : "Edit Routine",
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -80,9 +73,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
                 ),
               ),
               TextButton(
-                onPressed: () {
-                  if (_nameCtrl.text.isNotEmpty) widget.onSave(_nameCtrl.text);
-                },
+                onPressed: _handleSave,
                 child: const Text(
                   "Save",
                   style: TextStyle(
@@ -96,7 +87,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
           ),
           const SizedBox(height: 20),
 
-          // ROUTINE NAME INPUT
+          // Routine Name Input
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
@@ -114,12 +105,13 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
                 border: InputBorder.none,
                 labelText: "Routine Name",
                 labelStyle: TextStyle(color: Colors.grey),
+                hintText: "e.g. Chest & Tris",
               ),
             ),
           ),
           const SizedBox(height: 24),
 
-          // EXERCISE LIST HEADER
+          // Exercise List Header
           Text(
             "Exercises (${_exercises.length})",
             style: TextStyle(
@@ -130,7 +122,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
           ),
           const SizedBox(height: 10),
 
-          // DRAGGABLE LIST
+          // Reorderable List
           Expanded(
             child: _exercises.isEmpty
                 ? Center(
@@ -155,7 +147,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
                   ),
           ),
 
-          // BIG ADD BUTTON AT BOTTOM
+          // "Add Exercise" Button (Pinned Bottom)
           Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -194,7 +186,9 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
     bool isDark,
   ) {
     return Container(
-      key: ValueKey("${exercise.name}_$index"),
+      key: ValueKey(
+        "${exercise.name}_$index",
+      ), // Unique Key for ReorderableListView
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : Colors.grey.shade50,
@@ -217,6 +211,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Edit Sets Button
             IconButton(
               icon: const Icon(
                 Icons.tune_rounded,
@@ -225,6 +220,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
               ),
               onPressed: () => _openSetEditor(exercise),
             ),
+            // Remove Button
             IconButton(
               icon: Icon(
                 Icons.close,
@@ -237,6 +233,17 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
         ),
       ),
     );
+  }
+
+  void _handleSave() {
+    if (_nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please name your routine")));
+      return;
+    }
+    // Pass back both name and the list of exercises
+    widget.onSave(_nameCtrl.text.trim(), _exercises);
   }
 
   void _openSetEditor(ExerciseDetail exercise) {
@@ -274,8 +281,7 @@ class _RoutineEditorSheetState extends State<RoutineEditorSheet> {
   }
 }
 
-// --- MISSING CLASS ADDED BELOW ---
-
+// --- SMART SEARCH SHEET (Part of Routine Editor) ---
 class ExerciseSearchSheet extends StatefulWidget {
   final Function(String) onSelect;
   const ExerciseSearchSheet({super.key, required this.onSelect});
@@ -291,7 +297,7 @@ class _ExerciseSearchSheetState extends State<ExerciseSearchSheet> {
   @override
   void initState() {
     super.initState();
-    // masterExerciseList comes from exercise_models.dart
+    // Load from master list
     _filteredList = masterExerciseList;
   }
 
@@ -356,9 +362,8 @@ class _ExerciseSearchSheetState extends State<ExerciseSearchSheet> {
                 ? Center(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        masterExerciseList.add(
-                          _searchCtrl.text,
-                        ); // Save new exercise to memory
+                        // Logic to create a new custom exercise locally
+                        masterExerciseList.add(_searchCtrl.text);
                         widget.onSelect(_searchCtrl.text);
                       },
                       icon: const Icon(Icons.add),

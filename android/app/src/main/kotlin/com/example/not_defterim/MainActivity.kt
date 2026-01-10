@@ -1,5 +1,7 @@
 package com.example.not_defterim
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// This MUST be FlutterFragmentActivity to show Health Connect popups
+class MainActivity: FlutterFragmentActivity() {
+}

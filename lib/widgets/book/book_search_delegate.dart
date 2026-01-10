@@ -35,7 +35,7 @@ class BookSearchDelegate extends SearchDelegate {
           coverUrl: cover,
           totalPages: volume['pageCount'] ?? 0,
           currentPage: 0,
-          status: 'wishlist', // <--- FIXED: Adds to Up Next by default
+          status: 'wishlist',
         );
       }).toList();
     }

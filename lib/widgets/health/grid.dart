@@ -7,11 +7,16 @@ import 'cards/weight_dialog.dart';
 
 class HealthGrid extends StatelessWidget {
   final HealthDailyLog log;
+  final double lastKnownWeight;
+  final DateTime? lastWeightDate;
+  final List<String> availableRoutines;
+
   final Function(int) onWaterChanged;
   final Function(int) onCaffeineChanged;
-  final Function(int) onMoodChanged;
+  final Function(int) onCaffeineConfigChanged;
   final Function(bool) onDietToggle;
-  final Function(int) onStepsChanged;
+  // CHANGED: Now accepts Steps AND Calories
+  final Function(int, int) onStepsAndCaloriesChanged;
   final Function(double) onWeightChanged;
   final Function(String?) onRoutineChanged;
   final Function(bool) onWorkoutToggle;
@@ -24,11 +29,14 @@ class HealthGrid extends StatelessWidget {
   const HealthGrid({
     super.key,
     required this.log,
+    required this.lastKnownWeight,
+    required this.lastWeightDate,
+    required this.availableRoutines,
     required this.onWaterChanged,
     required this.onCaffeineChanged,
-    required this.onMoodChanged,
+    required this.onCaffeineConfigChanged,
     required this.onDietToggle,
-    required this.onStepsChanged,
+    required this.onStepsAndCaloriesChanged, // Updated Name
     required this.onWeightChanged,
     required this.onRoutineChanged,
     required this.onWorkoutToggle,
@@ -56,9 +64,13 @@ class HealthGrid extends StatelessWidget {
                 Expanded(
                   child: ActivityCard(
                     log: log,
+                    availableRoutines: availableRoutines,
                     onRoutineChanged: onRoutineChanged,
                     onWorkoutToggle: onWorkoutToggle,
-                    onStepsChanged: onStepsChanged,
+                    // Pass a simplified callback for simple step updates if needed,
+                    // or just ignore if the card doesn't edit steps directly.
+                    onStepsChanged: (s) =>
+                        onStepsAndCaloriesChanged(s, log.burnedCalories),
                     onWeightChanged: onWeightChanged,
                     onExerciseUpdated: onExerciseUpdated,
                   ),
@@ -79,18 +91,7 @@ class HealthGrid extends StatelessWidget {
           // STEPS & WEIGHT
           Row(
             children: [
-              Expanded(
-                child: _buildSimpleCard(
-                  context,
-                  Icons.directions_walk,
-                  "Steps",
-                  "${log.steps}",
-                  "steps",
-                  Colors.orange,
-                  cardColor,
-                  () => onStepsChanged(log.steps),
-                ),
-              ),
+              Expanded(child: _buildStepsCard(context, cardColor)),
               const SizedBox(width: 16),
               Expanded(child: _buildWeightCard(context)),
             ],
@@ -127,49 +128,17 @@ class HealthGrid extends StatelessWidget {
                     icon: Icons.coffee,
                     color: Colors.brown,
                     value: log.caffeineAmount,
-                    multiplier: 95, // Avg mg per cup
+                    multiplier: log.caffeineGlassSizeMg,
                     unit: "mg",
-                    // FIX: Changed +50 to +1 (1 cup)
                     onAdd: () => onCaffeineChanged(log.caffeineAmount + 1),
                     onRemove: () => onCaffeineChanged(
                       log.caffeineAmount > 0 ? log.caffeineAmount - 1 : 0,
                     ),
-                    onEditMultiplier: (val) {},
+                    onEditMultiplier: onCaffeineConfigChanged,
                   ),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-
-          // MOOD
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [1, 2, 3, 4, 5].map((level) {
-                final isSelected = log.mood == level;
-                final emojis = ["😫", "😐", "🙂", "😁", "🤩"];
-                return GestureDetector(
-                  onTap: () => onMoodChanged(level),
-                  child: AnimatedScale(
-                    scale: isSelected ? 1.2 : 1.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Opacity(
-                      opacity: isSelected ? 1.0 : 0.5,
-                      child: Text(
-                        emojis[level - 1],
-                        style: const TextStyle(fontSize: 28),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
           ),
           const SizedBox(height: 80),
         ],
@@ -177,10 +146,208 @@ class HealthGrid extends StatelessWidget {
     );
   }
 
+  Widget _buildStepsCard(BuildContext context, Color cardColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    // Use stored value, or fallback to auto-calc if 0
+    int displayBurned = log.burnedCalories > 0
+        ? log.burnedCalories
+        : (log.steps * 0.04).toInt();
+
+    return Stack(
+      children: [
+        Container(
+          height: 120,
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Icon(
+                Icons.directions_walk_rounded,
+                color: Colors.orange,
+                size: 28,
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${log.steps}",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.local_fire_department_rounded,
+                        size: 14,
+                        color: Colors.deepOrange,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        "$displayBurned kcal",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton(
+            icon: Icon(
+              Icons.settings_outlined,
+              color: Colors.grey.shade600,
+              size: 20,
+            ),
+            onPressed: () {
+              _showStepDialog(context);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showStepDialog(BuildContext context) {
+    TextEditingController stepCtrl = TextEditingController(
+      text: log.steps > 0 ? log.steps.toString() : "",
+    );
+    // Pre-fill calories if they exist, otherwise calculate estimated
+    int currentCal = log.burnedCalories > 0
+        ? log.burnedCalories
+        : (log.steps * 0.04).toInt();
+
+    TextEditingController calCtrl = TextEditingController(
+      text: currentCal > 0 ? currentCal.toString() : "",
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: const Text(
+            "Activity Data",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // STEPS INPUT
+              TextField(
+                controller: stepCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white, fontSize: 20),
+                decoration: const InputDecoration(
+                  labelText: "Steps",
+                  labelStyle: TextStyle(color: Colors.grey),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.orange),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.orange, width: 2),
+                  ),
+                  suffixText: "steps",
+                ),
+                autofocus: true,
+                onChanged: (val) {
+                  // Auto-update calories when steps change (optional convenience)
+                  int s = int.tryParse(val) ?? 0;
+                  calCtrl.text = (s * 0.04).toInt().toString();
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // CALORIES INPUT
+              TextField(
+                controller: calCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white, fontSize: 20),
+                decoration: const InputDecoration(
+                  labelText: "Burned Energy",
+                  labelStyle: TextStyle(color: Colors.grey),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.deepOrange),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.deepOrange, width: 2),
+                  ),
+                  suffixText: "kcal",
+                  prefixIcon: Icon(
+                    Icons.local_fire_department,
+                    color: Colors.deepOrange,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                final int steps = int.tryParse(stepCtrl.text) ?? 0;
+                final int cals = int.tryParse(calCtrl.text) ?? 0;
+
+                onStepsAndCaloriesChanged(steps, cals);
+                Navigator.pop(context);
+              },
+              child: const Text(
+                "Save",
+                style: TextStyle(
+                  color: Colors.deepOrange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildWeightCard(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+
+    double displayWeight = log.weight > 0 ? log.weight : lastKnownWeight;
+
+    String dateLabel = "";
+    if (log.weight > 0) {
+      dateLabel = "Measured today";
+    } else if (lastWeightDate != null) {
+      final diff = DateTime.now().difference(lastWeightDate!).inDays;
+      if (diff == 0)
+        dateLabel = "Measured today";
+      else if (diff == 1)
+        dateLabel = "Measured yesterday";
+      else
+        dateLabel = "Measured $diff days ago";
+    } else {
+      dateLabel = "No data yet";
+    }
 
     return Stack(
       children: [
@@ -205,16 +372,32 @@ class HealthGrid extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "${log.weight}",
+                    displayWeight.toStringAsFixed(1),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: textColor,
                     ),
                   ),
-                  const Text(
-                    "kg",
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "kg",
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                      Expanded(
+                        child: Text(
+                          dateLabel,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -234,7 +417,7 @@ class HealthGrid extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (context) => WeightPickerDialog(
-                  initialWeight: log.weight,
+                  initialWeight: displayWeight,
                   onWeightChanged: onWeightChanged,
                 ),
               );
@@ -242,56 +425,6 @@ class HealthGrid extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSimpleCard(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String value,
-    String unit,
-    Color color,
-    Color bg,
-    VoidCallback onTap,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: Container(
-          height: 120,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: color, size: 28),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

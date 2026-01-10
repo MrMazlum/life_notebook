@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-// IMPORT THE EXERCISE MODELS
 import '../widgets/health/activity/exercise_models.dart';
 
 class FoodItem {
@@ -47,9 +46,9 @@ class HealthDailyLog {
 
   // Activity
   int steps;
+  int burnedCalories; // NEW: Track burned calories
   String? workoutName;
   bool isWorkoutDone;
-  // NEW: Store the actual exercises performed
   List<ExerciseDetail> workoutLog;
   double weight;
 
@@ -57,6 +56,7 @@ class HealthDailyLog {
   int waterGlasses;
   int waterGlassSizeMl;
   int caffeineAmount;
+  int caffeineGlassSizeMg;
 
   // Nutrition
   bool useMacros;
@@ -66,68 +66,70 @@ class HealthDailyLog {
   int totalCarbs;
   int totalFat;
 
-  // Mood & Sleep
-  int mood;
+  // Sleep
   double sleepHours;
 
   HealthDailyLog({
     DateTime? date,
     this.steps = 0,
+    this.burnedCalories = 0, // Default 0
     this.workoutName,
     this.isWorkoutDone = false,
-    List<ExerciseDetail>? workoutLog, // NEW
+    List<ExerciseDetail>? workoutLog,
     this.weight = 0.0,
     this.waterGlasses = 0,
     this.waterGlassSizeMl = 250,
     this.caffeineAmount = 0,
+    this.caffeineGlassSizeMg = 95,
     this.useMacros = false,
     List<FoodItem>? foodLog,
     this.totalCalories = 0,
     this.totalProtein = 0,
     this.totalCarbs = 0,
     this.totalFat = 0,
-    this.mood = 3,
     this.sleepHours = 7.0,
   }) : date = date ?? DateTime.now(),
        foodLog = foodLog ?? [],
-       workoutLog = workoutLog ?? []; // NEW
+       workoutLog = workoutLog ?? [];
 
   HealthDailyLog copyWith({
     DateTime? date,
     int? steps,
+    int? burnedCalories,
     String? workoutName,
     bool? isWorkoutDone,
-    List<ExerciseDetail>? workoutLog, // NEW
+    List<ExerciseDetail>? workoutLog,
     double? weight,
     int? waterGlasses,
     int? waterGlassSizeMl,
     int? caffeineAmount,
+    int? caffeineGlassSizeMg,
     bool? useMacros,
     List<FoodItem>? foodLog,
     int? totalCalories,
     int? totalProtein,
     int? totalCarbs,
     int? totalFat,
-    int? mood,
     double? sleepHours,
   }) {
     return HealthDailyLog(
       date: date ?? this.date,
       steps: steps ?? this.steps,
+      burnedCalories: burnedCalories ?? this.burnedCalories,
       workoutName: workoutName ?? this.workoutName,
       isWorkoutDone: isWorkoutDone ?? this.isWorkoutDone,
-      workoutLog: workoutLog ?? this.workoutLog, // NEW
+      workoutLog: workoutLog ?? this.workoutLog,
       weight: weight ?? this.weight,
       waterGlasses: waterGlasses ?? this.waterGlasses,
       waterGlassSizeMl: waterGlassSizeMl ?? this.waterGlassSizeMl,
       caffeineAmount: caffeineAmount ?? this.caffeineAmount,
+      caffeineGlassSizeMg: caffeineGlassSizeMg ?? this.caffeineGlassSizeMg,
       useMacros: useMacros ?? this.useMacros,
       foodLog: foodLog ?? this.foodLog,
       totalCalories: totalCalories ?? this.totalCalories,
       totalProtein: totalProtein ?? this.totalProtein,
       totalCarbs: totalCarbs ?? this.totalCarbs,
       totalFat: totalFat ?? this.totalFat,
-      mood: mood ?? this.mood,
       sleepHours: sleepHours ?? this.sleepHours,
     );
   }
@@ -136,20 +138,21 @@ class HealthDailyLog {
     return {
       'date': date.toIso8601String().split('T')[0],
       'steps': steps,
+      'burnedCalories': burnedCalories,
       'workoutName': workoutName,
       'isWorkoutDone': isWorkoutDone,
-      'workoutLog': workoutLog.map((e) => e.toMap()).toList(), // NEW
+      'workoutLog': workoutLog.map((e) => e.toMap()).toList(),
       'weight': weight,
       'waterGlasses': waterGlasses,
       'waterGlassSizeMl': waterGlassSizeMl,
       'caffeineAmount': caffeineAmount,
+      'caffeineGlassSizeMg': caffeineGlassSizeMg,
       'useMacros': useMacros,
       'foodLog': foodLog.map((f) => f.toMap()).toList(),
       'totalCalories': totalCalories,
       'totalProtein': totalProtein,
       'totalCarbs': totalCarbs,
       'totalFat': totalFat,
-      'mood': mood,
       'sleepHours': sleepHours,
     };
   }
@@ -162,7 +165,6 @@ class HealthDailyLog {
           .toList();
     }
 
-    // NEW: Load Exercises
     var loadedExercises = <ExerciseDetail>[];
     if (map['workoutLog'] != null) {
       loadedExercises = (map['workoutLog'] as List)
@@ -173,20 +175,21 @@ class HealthDailyLog {
     return HealthDailyLog(
       date: docDate,
       steps: map['steps'] ?? 0,
+      burnedCalories: map['burnedCalories'] ?? 0,
       workoutName: map['workoutName'],
       isWorkoutDone: map['isWorkoutDone'] ?? false,
-      workoutLog: loadedExercises, // NEW
+      workoutLog: loadedExercises,
       weight: (map['weight'] ?? 0.0).toDouble(),
       waterGlasses: map['waterGlasses'] ?? 0,
       waterGlassSizeMl: map['waterGlassSizeMl'] ?? 250,
       caffeineAmount: map['caffeineAmount'] ?? 0,
+      caffeineGlassSizeMg: map['caffeineGlassSizeMg'] ?? 95,
       useMacros: map['useMacros'] ?? false,
       foodLog: loadedFood,
       totalCalories: map['totalCalories'] ?? 0,
       totalProtein: map['totalProtein'] ?? 0,
       totalCarbs: map['totalCarbs'] ?? 0,
       totalFat: map['totalFat'] ?? 0,
-      mood: map['mood'] ?? 3,
       sleepHours: (map['sleepHours'] ?? 7.0).toDouble(),
     );
   }

@@ -6,10 +6,10 @@ class SetDetail {
 
   SetDetail({this.reps = 10, this.weight = 0.0});
 
-  // NEW: Convert to Map for Firestore
+  // Convert to Map for Firestore
   Map<String, dynamic> toMap() => {'reps': reps, 'weight': weight};
 
-  // NEW: Create from Map
+  // Create from Map (handle type safety)
   factory SetDetail.fromMap(Map<String, dynamic> map) {
     return SetDetail(
       reps: map['reps'] ?? 0,
@@ -25,13 +25,11 @@ class ExerciseDetail {
   ExerciseDetail({required this.name, List<SetDetail>? sets})
     : sets = sets ?? [SetDetail(), SetDetail(), SetDetail()];
 
-  // NEW: Convert to Map
   Map<String, dynamic> toMap() => {
     'name': name,
     'sets': sets.map((s) => s.toMap()).toList(),
   };
 
-  // NEW: Create from Map
   factory ExerciseDetail.fromMap(Map<String, dynamic> map) {
     return ExerciseDetail(
       name: map['name'] ?? '',
@@ -44,7 +42,8 @@ class ExerciseDetail {
   }
 }
 
-// Master List (remains the same)
+// Global Master List of Exercises (for search)
+// In a real app, this could also come from Firestore.
 final List<String> masterExerciseList = [
   "Bench Press",
   "Incline Dumbbell Press",

@@ -1,16 +1,16 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.not_defterim"
-    compileSdk = flutter.compileSdkVersion
+    
+    // REQUIRED: Must be 36 for the latest health/google_sign_in plugins
+    compileSdk = 36
+    
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -23,24 +23,20 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.not_defterim"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         
-        // --- FIX HERE: Changed from flutter.minSdkVersion to 26 ---
-        minSdk = 26 
-        // ----------------------------------------------------------
+        // REQUIRED: Min SDK 26 for Health Connect
+        minSdk = 26
         
-        targetSdk = flutter.targetSdkVersion
+        // Target SDK can be 34 or 35, but compileSdk must be 36
+        targetSdk = 34
+        
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

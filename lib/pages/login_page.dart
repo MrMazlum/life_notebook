@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Needed for Status Bar Control
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -49,18 +49,14 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    // FORCE DARK UI STRATEGY
     const bgColor = Colors.black;
     const textColor = Colors.white;
 
-    // This widget forces the Android Status Bar (Time/Battery) to be WHITE (Light)
-    // regardless of whether the user is in Light Mode or Dark Mode.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent, // Transparent background
-        statusBarIconBrightness:
-            Brightness.light, // White Icons (for dark background)
-        statusBarBrightness: Brightness.dark, // iOS equivalent
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
         backgroundColor: bgColor,
@@ -71,7 +67,6 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // --- APP LOGO ---
                   Container(
                     height: 400,
                     width: double.infinity,
@@ -87,8 +82,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
-                  // --- APP TITLE ---
                   Transform.translate(
                     offset: const Offset(0, -20),
                     child: const Text(
@@ -101,10 +94,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 60),
-
-                  // --- GOOGLE SIGN IN BUTTON ---
                   if (_isLoading)
                     const CircularProgressIndicator(color: Colors.white)
                   else
@@ -139,7 +129,6 @@ class _LoginPageState extends State<LoginPage> {
                                 },
                               ),
                             ),
-
                             const SizedBox(width: 12),
                             const Text(
                               "Continue with Google",
@@ -154,17 +143,10 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ),
-
                   const SizedBox(height: 24),
-
-                  // Privacy Note
                   Text(
                     "Securely synced with your Google Account.",
-                    style: TextStyle(
-                      // CHANGED: From white24 to white54 for better visibility
-                      color: Colors.white54,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ],
               ),

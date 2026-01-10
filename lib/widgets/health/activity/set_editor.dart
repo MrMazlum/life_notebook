@@ -18,14 +18,18 @@ class SetEditorSheet extends StatefulWidget {
 }
 
 class _SetEditorSheetState extends State<SetEditorSheet> {
+  // We use a local list to edit freely before saving
   late List<SetDetail> _sets;
 
   @override
   void initState() {
     super.initState();
+    // Deep copy to prevent modifying the parent state directly until "Save" is pressed
     _sets = widget.initialSets
         .map((s) => SetDetail(reps: s.reps, weight: s.weight))
         .toList();
+
+    // Ensure at least one set exists
     if (_sets.isEmpty) _sets.add(SetDetail());
   }
 
@@ -35,7 +39,6 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
-    // 1. FORCE HEIGHT
     final height = MediaQuery.of(context).size.height * 0.85;
 
     return Container(
@@ -47,7 +50,7 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
       ),
       child: Column(
         children: [
-          // HANDLE
+          // Handle
           Center(
             child: Container(
               width: 40,
@@ -60,7 +63,7 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
             ),
           ),
 
-          // HEADER
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -93,53 +96,20 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
           ),
           const SizedBox(height: 20),
 
-          // TABLE HEADERS
+          // Headers
           Row(
             children: [
-              SizedBox(
-                width: 40,
-                child: Center(
-                  child: Text(
-                    "Set",
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+              const SizedBox(width: 40), // Spacing for Index Bubble
               const Spacer(),
-              SizedBox(
-                width: 90,
-                child: Center(
-                  child: Text(
-                    "kg",
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 90,
-                child: Center(
-                  child: Text(
-                    "Reps",
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 40),
+              _buildHeaderLabel("kg"),
+              const SizedBox(width: 20),
+              _buildHeaderLabel("Reps"),
+              const SizedBox(width: 40), // Spacing for Delete Icon
             ],
           ),
           const SizedBox(height: 10),
 
-          // SCROLLABLE LIST
+          // List
           Expanded(
             child: ListView.builder(
               itemCount: _sets.length,
@@ -148,7 +118,7 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
             ),
           ),
 
-          // BUTTON AREA
+          // Add Set Button
           Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -160,10 +130,9 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
               child: ElevatedButton.icon(
                 onPressed: () {
                   setState(() {
-                    final lastSet = _sets.last;
-                    _sets.add(
-                      SetDetail(reps: lastSet.reps, weight: lastSet.weight),
-                    );
+                    // Duplicate last set values for convenience
+                    final last = _sets.last;
+                    _sets.add(SetDetail(reps: last.reps, weight: last.weight));
                   });
                 },
                 icon: const Icon(Icons.add),
@@ -189,47 +158,56 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
     );
   }
 
+  Widget _buildHeaderLabel(String text) {
+    return SizedBox(
+      width: 80,
+      child: Center(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSetRow(int number, SetDetail set, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
         children: [
-          // Set Number Bubble
-          SizedBox(
+          // Index Bubble
+          Container(
             width: 40,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white10 : Colors.grey.shade200,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  "$number",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white10 : Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                "$number",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ),
           ),
           const Spacer(),
 
-          // Weight Input
-          _buildCompactInput(
-            set.weight.toString(),
-            (val) => set.weight = double.tryParse(val) ?? set.weight,
-            isDark,
-          ),
-          const SizedBox(width: 16),
+          // Weight
+          _buildInput(isDark, set.weight.toString(), (val) {
+            set.weight = double.tryParse(val) ?? 0;
+          }),
+          const SizedBox(width: 20),
 
-          // Reps Input
-          _buildCompactInput(
-            set.reps.toString(),
-            (val) => set.reps = int.tryParse(val) ?? set.reps,
-            isDark,
-          ),
+          // Reps
+          _buildInput(isDark, set.reps.toString(), (val) {
+            set.reps = int.tryParse(val) ?? 0;
+          }),
 
           // Delete
           SizedBox(
@@ -250,16 +228,12 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
     );
   }
 
-  Widget _buildCompactInput(
-    String initial,
-    Function(String) onChanged,
-    bool isDark,
-  ) {
+  Widget _buildInput(bool isDark, String initial, Function(String) onChanged) {
     return SizedBox(
-      width: 90,
+      width: 80,
       child: TextFormField(
         initialValue: initial,
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
         style: TextStyle(
           fontWeight: FontWeight.bold,
@@ -267,7 +241,7 @@ class _SetEditorSheetState extends State<SetEditorSheet> {
           color: isDark ? Colors.white : Colors.black,
         ),
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
           filled: true,
           fillColor: isDark ? Colors.black26 : Colors.grey.shade100,
           border: OutlineInputBorder(

@@ -80,7 +80,7 @@ class _BookDetailsSheetState extends State<BookDetailsSheet>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: Colors.red.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -326,9 +326,7 @@ class _BookDetailsSheetState extends State<BookDetailsSheet>
                       padding: const EdgeInsets.all(24),
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey.withValues(alpha: 0.1),
-                        ),
+                        border: Border.all(color: Colors.grey.withOpacity(0.1)),
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Center(
@@ -417,8 +415,8 @@ class _BookDetailsSheetState extends State<BookDetailsSheet>
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.1,
+                                            color: Colors.black.withOpacity(
+                                              0.1,
                                             ),
                                             blurRadius: 4,
                                           ),
